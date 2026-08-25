@@ -1,4 +1,4 @@
-﻿absl-py==2.4.0
+absl-py==2.4.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
 anyio==4.13.0
@@ -16,7 +16,7 @@ ortools==9.15.6755
 pandas==3.0.2
 protobuf==6.33.6
 pydantic==2.13.3
-pydantic_core==2.46.3
+pydantic_core==2.48.0
 python-dateutil==2.9.0.post0
 six==1.17.0
 SQLAlchemy==2.0.49
