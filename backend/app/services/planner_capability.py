@@ -2969,6 +2969,15 @@ def build_planner_schedule_proposal(
     """Build a validated Planner SchedulePatch proposal without writes."""
 
     started_at = perf_counter()
+    if (
+        provider_auth_preflight
+        and operation_mode != "remove"
+        and subagent_task is None
+    ):
+        raise ValueError(
+            "Model-backed scheduling requires an owned Planner subagent task."
+        )
+
     runtime_settings = get_provider_runtime_settings(provider_override, model_override)
     provider_readiness = (
         provider_transport_readiness(runtime_settings)
@@ -2985,15 +2994,6 @@ def build_planner_schedule_proposal(
             runtime_settings=runtime_settings,
             provider_readiness=provider_readiness,
         )
-    if (
-        provider_auth_preflight
-        and operation_mode != "remove"
-        and subagent_task is None
-    ):
-        raise ValueError(
-            "Model-backed scheduling requires an owned Planner subagent task."
-        )
-
     normalized_window_start = _ceil_to_slot_boundary(
         local_wall_time(window_start),
         slot_minutes,
