@@ -1,0 +1,52 @@
+.rich-ai-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.ai-task-reference {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  margin: 0 2px;
+  padding: 1px 6px 1px 3px;
+  border: 1px solid color-mix(in srgb, var(--task-reference-accent, #6366f1) 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--task-reference-accent, #6366f1) 11%, white 89%);
+  color: color-mix(in srgb, var(--task-reference-accent, #6366f1) 68%, #172b4d 32%);
+  font-weight: 650;
+  line-height: 1.35;
+  vertical-align: baseline;
+}
+
+.ai-task-reference-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--task-reference-accent, #6366f1) 16%, white 84%);
+  font-size: 0.7rem;
+}
+
+.ai-math-inline {
+  display: inline-block;
+  max-width: 100%;
+  margin-inline: 2px;
+  vertical-align: middle;
+}
+
+.ai-math-display {
+  max-width: 100%;
+  margin: 8px 0;
+  padding: 8px 10px;
+  overflow-x: auto;
+  border-radius: 10px;
+  background: #f8faff;
+}
+
+.ai-math .katex {
+  font-size: 1em;
+}

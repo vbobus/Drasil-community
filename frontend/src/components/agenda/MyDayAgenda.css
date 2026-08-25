@@ -1,0 +1,571 @@
+.my-day-agenda {
+  --agenda-ink: #142c50;
+  --agenda-muted: #6f83a2;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  margin-top: 8px;
+  padding: clamp(18px, 2vw, 30px);
+  border: 1px solid color-mix(in srgb, var(--color-border-subtle) 86%, white 14%);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--agenda-ink);
+  overflow: auto;
+}
+
+.my-day-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.my-day-eyebrow,
+.my-day-section-heading p {
+  margin: 0 0 4px;
+  color: #697fa2;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.my-day-header h1 {
+  margin: 0;
+  color: #10294d;
+  font-size: clamp(1.6rem, 2.4vw, 2.25rem);
+  font-weight: 740;
+  letter-spacing: -0.045em;
+}
+
+.my-day-subtitle {
+  margin: 7px 0 0;
+  color: var(--agenda-muted);
+  font-size: 0.86rem;
+}
+
+.my-day-header-actions,
+.my-day-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.my-day-header-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid #dce5f1;
+  border-radius: 11px;
+  background: white;
+  color: #29466d;
+  font-size: 0.75rem;
+  font-weight: 700;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.my-day-header-actions button:hover:not(:disabled) {
+  border-color: #afc4e2;
+  background: #f7faff;
+  color: #173762;
+}
+
+.my-day-date-nav > button:first-child,
+.my-day-date-nav > button:last-child {
+  width: 36px;
+  padding: 0;
+}
+
+.my-day-date-nav .my-day-today-button {
+  min-width: 62px;
+  padding: 0 12px;
+}
+
+.my-day-date-nav .my-day-today-button:disabled {
+  background: #f2f6fc;
+  color: #9aaac1;
+  cursor: default;
+}
+
+.my-day-header-actions .my-day-calendar-button {
+  gap: 7px;
+  margin-left: 4px;
+  padding: 0 13px;
+  border-color: #315fd5;
+  background: #315fd5;
+  color: white;
+}
+
+.my-day-header-actions .my-day-calendar-button:hover {
+  border-color: #234fbf;
+  background: #234fbf;
+  color: white;
+}
+
+.my-day-overview {
+  display: grid;
+  grid-template-columns: auto minmax(145px, 1fr) minmax(150px, 0.8fr) minmax(150px, 0.8fr);
+  align-items: center;
+  gap: 15px;
+  width: min(100%, 1180px);
+  margin: 24px auto 22px;
+  padding: 13px 16px;
+  border: 1px solid #e0e8f3;
+  border-radius: 16px;
+  background: #f8faff;
+}
+
+.my-day-progress {
+  display: grid;
+  place-items: center;
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at center, #f8faff 58%, transparent 60%),
+    conic-gradient(#3769e8 var(--agenda-progress), #dce6f6 0);
+}
+
+.my-day-progress span {
+  color: #284f9d;
+  font-size: 0.63rem;
+  font-weight: 800;
+}
+
+.my-day-overview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.my-day-overview-copy strong,
+.my-day-metric strong {
+  color: #1c365c;
+  font-size: 0.78rem;
+}
+
+.my-day-overview-copy span,
+.my-day-metric span {
+  color: #7c8fab;
+  font-size: 0.7rem;
+}
+
+.my-day-metric {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding-left: 15px;
+  border-left: 1px solid #dce5f1;
+  color: #6281b2;
+}
+
+.my-day-metric span {
+  display: flex;
+  flex-direction: column;
+}
+
+.my-day-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 310px);
+  gap: 24px;
+  width: min(100%, 1180px);
+  margin: 0 auto;
+}
+
+.my-day-agenda-column,
+.my-day-focus-column {
+  min-width: 0;
+}
+
+.my-day-focus-column {
+  padding-left: 22px;
+  border-left: 1px solid #e3eaf4;
+}
+
+.my-day-section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  margin-bottom: 12px;
+}
+
+.my-day-section-heading h2 {
+  margin: 0;
+  color: #17345c;
+  font-size: 1rem;
+  letter-spacing: -0.025em;
+}
+
+.my-day-section-heading > span {
+  color: #8293ad;
+  font-size: 0.69rem;
+  font-weight: 650;
+}
+
+.my-day-timeline {
+  margin: 0;
+  padding: 2px 0 8px;
+  list-style: none;
+}
+
+.my-day-timeline > li {
+  position: relative;
+  display: grid;
+  grid-template-columns: 108px 14px minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 76px;
+}
+
+.my-day-timeline > li > time {
+  padding: 18px 16px 0 0;
+  color: #6f83a2;
+  font-size: 0.68rem;
+  font-weight: 680;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.my-day-timeline-node {
+  position: relative;
+  display: block;
+}
+
+.my-day-timeline-node::before {
+  content: "";
+  position: absolute;
+  top: 23px;
+  bottom: -23px;
+  left: 6px;
+  width: 1px;
+  background: #dbe4f1;
+}
+
+.my-day-timeline-node::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  top: 21px;
+  left: 3px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: #7890b5;
+  box-shadow: 0 0 0 1px #c9d6e8;
+}
+
+.my-day-timeline > li:last-child .my-day-timeline-node::before {
+  bottom: calc(100% - 25px);
+}
+
+.my-day-agenda-card {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  min-height: 58px;
+  margin: 2px 0 10px 10px;
+  border: 1px solid color-mix(in srgb, var(--agenda-color) 25%, #dfe7f2 75%);
+  border-left: 3px solid var(--agenda-color);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--agenda-color) 7%, white 93%);
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+
+.my-day-agenda-card:hover {
+  border-color: color-mix(in srgb, var(--agenda-color) 40%, #d4dfed 60%);
+  background: color-mix(in srgb, var(--agenda-color) 10%, white 90%);
+}
+
+.my-day-complete-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin-left: 13px;
+  border: 1.5px solid #bdcce0;
+  border-radius: 6px;
+  background: white;
+  color: white;
+}
+
+.my-day-complete-button[aria-pressed='true'] {
+  border-color: #4b72df;
+  background: #4b72df;
+}
+
+.my-day-complete-button[aria-busy='true'] {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.my-day-agenda-card-main {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 8px 12px 8px 10px;
+  color: inherit;
+  text-align: left;
+}
+
+.my-day-task-emoji,
+.my-day-focus-emoji {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 29px;
+  height: 29px;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--agenda-color, #7c91b4) 12%, white 88%);
+  font-size: 0.85rem;
+}
+
+.my-day-task-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.my-day-task-copy strong {
+  overflow: hidden;
+  color: #1c365a;
+  font-size: 0.79rem;
+  font-weight: 720;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-day-task-copy > span {
+  color: #8292aa;
+  font-size: 0.65rem;
+}
+
+.my-day-status,
+.my-day-recurring {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #edf2f9;
+  color: #6f82a0;
+  font-size: 0.58rem;
+  font-weight: 750;
+}
+
+.my-day-status.is-now {
+  background: #e5f5ec;
+  color: #27744b;
+}
+
+.my-day-status.is-upcoming {
+  background: #eaf0ff;
+  color: #345eae;
+}
+
+.my-day-timeline > li.is-complete .my-day-agenda-card {
+  opacity: 0.68;
+}
+
+.my-day-timeline > li.is-complete .my-day-task-copy strong {
+  text-decoration: line-through;
+}
+
+.my-day-state,
+.my-day-empty,
+.my-day-focus-empty {
+  border: 1px dashed #d7e1ee;
+  border-radius: 14px;
+  background: #fafcff;
+  color: #7185a3;
+  font-size: 0.75rem;
+}
+
+.my-day-state,
+.my-day-focus-empty {
+  padding: 22px;
+}
+
+.my-day-state.is-error {
+  border-color: #efcaca;
+  background: #fff8f8;
+  color: #a94848;
+}
+
+.my-day-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 28px;
+}
+
+.my-day-empty h3,
+.my-day-empty p {
+  margin: 0;
+}
+
+.my-day-empty h3 {
+  color: #274368;
+  font-size: 0.86rem;
+}
+
+.my-day-empty p {
+  max-width: 430px;
+  line-height: 1.5;
+}
+
+.my-day-empty button {
+  margin-top: 6px;
+  padding: 8px 12px;
+  border-radius: 9px;
+  background: #315fd5;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.my-day-focus-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.my-day-focus-list button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 49px;
+  padding: 7px 9px;
+  border: 1px solid #e0e8f2;
+  border-radius: 11px;
+  background: white;
+  color: #1f395e;
+  text-align: left;
+}
+
+.my-day-focus-list button:hover {
+  border-color: #bdcee4;
+  background: #f9fbff;
+}
+
+.my-day-focus-list button > span:nth-child(2) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.my-day-focus-list strong,
+.my-day-focus-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-day-focus-list strong {
+  font-size: 0.73rem;
+}
+
+.my-day-focus-list small {
+  color: #8293ab;
+  font-size: 0.62rem;
+}
+
+@media (max-width: 980px) {
+  .my-day-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .my-day-header-actions {
+    justify-content: space-between;
+  }
+
+  .my-day-overview {
+    grid-template-columns: auto 1fr 1fr;
+  }
+
+  .my-day-overview .my-day-metric:last-child {
+    display: none;
+  }
+
+  .my-day-content {
+    grid-template-columns: 1fr;
+  }
+
+  .my-day-focus-column {
+    padding: 20px 0 0;
+    border-top: 1px solid #e3eaf4;
+    border-left: 0;
+  }
+}
+
+@media (max-width: 640px) {
+  .my-day-agenda {
+    margin-top: 4px;
+    padding: 16px 12px 24px;
+    border-radius: 18px;
+  }
+
+  .my-day-header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .my-day-header-actions .my-day-calendar-button {
+    margin-left: 0;
+  }
+
+  .my-day-date-nav > button:nth-child(2) {
+    flex: 1;
+  }
+
+  .my-day-overview {
+    grid-template-columns: auto 1fr;
+    margin-top: 18px;
+  }
+
+  .my-day-metric {
+    display: none;
+  }
+
+  .my-day-timeline > li {
+    grid-template-columns: 76px 12px minmax(0, 1fr);
+  }
+
+  .my-day-timeline > li > time {
+    padding-right: 9px;
+    font-size: 0.6rem;
+  }
+
+  .my-day-agenda-card {
+    margin-left: 7px;
+  }
+
+  .my-day-status,
+  .my-day-recurring {
+    display: none;
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "id": "tree-cleanup",
+  "version": "1.0.0",
+  "title": "Task Tree Cleanup",
+  "summary": "Review task-tree structure, identify stale or confusing branches, and prepare bounded cleanup proposals.",
+  "available_to": ["strategist", "planner"],
+  "use_for": ["reviewing messy task trees", "finding stale work", "reorganizing branches", "archiving or removing obsolete tasks"],
+  "not_for": ["silently deleting or moving tasks", "assuming stale means safe to remove"],
+  "recommended_tools": ["analyze_tree_cleanup_candidates", "get_task_branch", "get_parent_chain", "submit_task_tree_plan"],
+  "compatible_output_modes": ["analysis", "recommendation", "proposal"],
+  "evidence_requirements": {"candidate_analysis_is_not_deletion_authority": true, "destructive_targets_must_be_exact": true},
+  "dependencies": [],
+  "maximum_loaded_characters": 5000
+}

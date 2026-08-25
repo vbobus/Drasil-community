@@ -1,0 +1,14 @@
+{
+  "id": "scheduling",
+  "version": "1.0.0",
+  "title": "Scheduling and Timeboxing",
+  "summary": "Fit selected work into available time while respecting deadlines, estimates, dependencies, and durable preferences.",
+  "available_to": ["strategist", "planner"],
+  "use_for": ["planning today or this week", "timeboxing tasks", "checking schedule feasibility", "incorporating scheduling preferences"],
+  "not_for": ["inventing unavailable calendar commitments", "silently changing task deadlines"],
+  "recommended_tools": ["query_task_graph", "get_task_snapshot", "get_session_memory", "query_preferences", "list_remembered_preferences", "analyze_preference_cleanup_candidates", "submit_preference_plan", "submit_preference_management_plan", "submit_preference_cleanup_plan", "submit_task_metadata_plan"],
+  "compatible_output_modes": ["analysis", "recommendation", "proposal"],
+  "evidence_requirements": {"task_estimates_checked": true, "calendar_limits_must_be_disclosed": true},
+  "dependencies": [],
+  "maximum_loaded_characters": 5000
+}

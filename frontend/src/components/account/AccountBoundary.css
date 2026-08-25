@@ -1,0 +1,226 @@
+.account-page {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 28px 16px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(99, 102, 241, 0.16), transparent 34%),
+    radial-gradient(circle at 80% 90%, rgba(14, 165, 233, 0.12), transparent 32%),
+    var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+.account-stack {
+  width: min(460px, 100%);
+  display: grid;
+  gap: 12px;
+}
+
+.account-card,
+.account-server-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 22px;
+  background: color-mix(in srgb, var(--color-bg-surface) 96%, transparent);
+  box-shadow: 0 24px 70px -44px rgba(15, 23, 42, 0.62);
+}
+
+.account-card-heading {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.account-card-heading img {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+}
+
+.account-eyebrow {
+  color: var(--color-cat-work);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.account-card h1 {
+  font-size: 1.42rem;
+  line-height: 1.2;
+}
+
+.account-intro,
+.account-server-card p {
+  color: var(--color-text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.account-card label,
+.account-server-card label {
+  display: grid;
+  gap: 6px;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.account-card label small {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.account-card input,
+.account-server-card input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 11px;
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+
+.account-card input:focus,
+.account-server-card input:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-cat-work) 30%, transparent);
+  border-color: var(--color-cat-work);
+}
+
+.account-actions {
+  display: flex;
+  gap: 9px;
+}
+
+.account-actions button,
+.account-server-card button {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 11px;
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  font-weight: 750;
+}
+
+.account-actions .account-primary {
+  flex: 1;
+  border-color: transparent;
+  background: var(--color-cat-work);
+  color: white;
+}
+
+.account-error,
+.account-connection-error {
+  padding: 11px 12px;
+  border: 1px solid #f2b8b5;
+  border-radius: 11px;
+  background: #fff1f0;
+  color: #9a2f2a;
+  font-size: 0.78rem;
+  line-height: 1.4;
+}
+
+.account-connection-error {
+  display: grid;
+  gap: 3px;
+}
+
+.account-server-card {
+  gap: 10px;
+  padding: 18px 20px;
+}
+
+.account-server-card code {
+  overflow-wrap: anywhere;
+}
+
+.account-server-card button {
+  align-self: flex-start;
+}
+
+.account-loading {
+  padding: 18px 22px;
+  border-radius: 999px;
+  background: var(--color-bg-surface);
+  box-shadow: 0 18px 48px -32px rgba(15, 23, 42, 0.6);
+  color: var(--color-text-secondary);
+  font-weight: 700;
+}
+
+.account-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(8, 18, 37, 0.58);
+  backdrop-filter: blur(8px);
+}
+
+.account-modal-backdrop > div {
+  width: min(480px, 100%);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.account-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.account-choice-grid button {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  padding: 9px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 12px;
+  background: var(--color-bg-surface);
+  text-align: left;
+}
+
+.account-choice-grid button > span {
+  grid-row: 1 / span 2;
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--color-cat-work-tint);
+  color: var(--color-cat-work);
+  font-weight: 800;
+}
+
+.account-choice-grid button strong,
+.account-choice-grid button small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-choice-grid button small {
+  color: var(--color-text-muted);
+}
+
+.account-choice-grid button.is-selected {
+  border-color: var(--color-cat-work);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-cat-work) 16%, transparent);
+}
+
+.account-choice-grid button:disabled {
+  opacity: 0.5;
+}
+
+@media (max-width: 520px) {
+  .account-choice-grid { grid-template-columns: 1fr; }
+  .account-card { padding: 20px; }
+}

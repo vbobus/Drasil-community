@@ -1,0 +1,1450 @@
+/*
+ * Drasil dark appearance
+ * ----------------------
+ * This file is imported after component styles so legacy light-only component
+ * declarations can be bridged to the shared theme tokens without changing the
+ * original light appearance.
+ */
+
+html[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-bg-base: #0b1120;
+  --color-bg-surface: #111a2c;
+  --color-bg-elevated: #172238;
+  --color-bg-overlay: #22314b;
+
+  --color-text-primary: #edf3ff;
+  --color-text-secondary: #b8c5da;
+  --color-text-muted: #8192ae;
+  --color-text-inverse: #f8fafc;
+
+  --color-border-subtle: #273651;
+  --color-border-strong: #3b4e70;
+
+  --color-cat-work: #818cf8;
+  --color-cat-work-tint: #1c2548;
+  --color-cat-health: #34d399;
+  --color-cat-health-tint: #123a34;
+  --color-cat-home: #fbbf24;
+  --color-cat-home-tint: #3d3018;
+  --color-cat-finance: #38bdf8;
+  --color-cat-finance-tint: #153448;
+  --color-cat-social: #f472b6;
+  --color-cat-social-tint: #42213a;
+  --color-cat-growth: #a78bfa;
+  --color-cat-growth-tint: #2e2450;
+  --color-cat-leisure: #2dd4bf;
+  --color-cat-leisure-tint: #123b3b;
+
+  --color-state-success: #34d399;
+  --color-state-success-tint: #123a34;
+  --color-state-warning: #fbbf24;
+  --color-state-warning-tint: #3d3018;
+  --color-state-info: #818cf8;
+  --color-state-info-tint: #1c2548;
+  --color-state-rollover: #94a3b8;
+  --color-state-rollover-tint: #182238;
+  --color-state-blocked: #53627a;
+
+  --shadow-rest:
+    0 1px 2px rgba(0, 0, 0, 0.22),
+    0 8px 20px -16px rgba(0, 0, 0, 0.7);
+  --shadow-hover:
+    0 12px 28px -18px rgba(0, 0, 0, 0.78),
+    0 4px 10px -8px rgba(0, 0, 0, 0.64);
+  --shadow-drag:
+    0 24px 40px -16px rgba(0, 0, 0, 0.84),
+    0 10px 18px -12px rgba(0, 0, 0, 0.72);
+  --shadow-popover: 0 28px 60px -18px rgba(0, 0, 0, 0.88);
+
+  --theme-bg-translucent: rgba(17, 26, 44, 0.94);
+  --theme-bg-soft: rgba(23, 34, 56, 0.88);
+  --theme-bg-hover: rgba(42, 57, 86, 0.76);
+  --theme-focus-ring: rgba(129, 140, 248, 0.28);
+}
+
+html[data-theme='dark'] body {
+  background: var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] ::selection {
+  background: color-mix(in srgb, var(--color-cat-work) 42%, transparent);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(input, textarea, select) {
+  border-color: var(--color-border-subtle);
+  background-color: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(input, textarea)::placeholder {
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] :is(
+  [class$='-title'],
+  [class*='-title '],
+  [class$='-heading'],
+  [class*='-heading '],
+  [class$='-name'],
+  [class*='-name ']
+) {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  [class$='-subtitle'],
+  [class*='-subtitle '],
+  [class$='-copy'],
+  [class*='-copy '],
+  [class$='-description'],
+  [class*='-description '],
+  [class$='-hint'],
+  [class*='-hint ']
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  [class$='-eyebrow'],
+  [class*='-eyebrow '],
+  [class$='-label'],
+  [class*='-label ']
+) {
+  color: var(--color-text-muted);
+}
+
+/* Application shell */
+html[data-theme='dark'] .app-root {
+  background:
+    radial-gradient(circle at 5% 0%, rgba(77, 91, 190, 0.18) 0%, transparent 28%),
+    radial-gradient(circle at 96% 0%, rgba(101, 69, 164, 0.14) 0%, transparent 25%),
+    linear-gradient(180deg, #0d1424 0%, #090f1c 100%);
+}
+
+html[data-theme='dark'] :is(
+  .app-search-shell,
+  .app-toolbar-btn,
+  .workspace-panel-slot.is-collapsed,
+  .workspace-panel-toggle,
+  .ai-workspace-panel,
+  .app-startup-recovery-card
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--theme-bg-translucent);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-rest);
+}
+
+html[data-theme='dark'] :is(
+  .app-toolbar-date,
+  .app-search-shell input,
+  .ai-workspace-header h2,
+  .app-startup-recovery-card
+) {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .app-search-icon,
+  .app-search-shortcut,
+  .workspace-panel-toggle,
+  .workspace-panel-collapsed-icon,
+  .ai-workspace-empty,
+  .app-startup-recovery-card p
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .ai-workspace-tabs {
+  background: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] .ai-workspace-tabs button {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .ai-workspace-tabs button span {
+  background: var(--color-bg-overlay);
+}
+
+html[data-theme='dark'] .ai-workspace-tabs button.is-active {
+  background: color-mix(in srgb, var(--color-cat-work) 16%, var(--color-bg-surface));
+  color: #aebaff;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-cat-work) 30%, transparent);
+}
+
+html[data-theme='dark'] .ai-workspace-tabs button.is-active span {
+  background: color-mix(in srgb, var(--color-cat-work) 18%, var(--color-bg-elevated));
+}
+
+html[data-theme='dark'] .strategist-empty-logo {
+  padding: 4px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  background: #f8fbff;
+  box-shadow: 0 10px 24px -16px rgba(64, 127, 255, 0.8);
+}
+
+html[data-theme='dark'] .app-startup-recovery {
+  background:
+    radial-gradient(circle at top left, rgba(77, 91, 190, 0.2) 0%, transparent 30%),
+    var(--color-bg-base);
+}
+
+/* Navigation */
+html[data-theme='dark'] .sidebar {
+  border-color: var(--color-border-subtle);
+  background:
+    linear-gradient(180deg, rgba(17, 26, 44, 0.98) 0%, rgba(11, 17, 32, 0.98) 100%);
+  box-shadow: 12px 0 30px -28px rgba(0, 0, 0, 0.9);
+}
+
+html[data-theme='dark'] .sidebar-logo-btn {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .sidebar-logo-btn.expanded {
+  justify-content: center;
+  padding-inline: 8px;
+}
+
+html[data-theme='dark'] .sidebar-wordmark {
+  color: var(--color-text-primary);
+  opacity: 0.92;
+}
+
+html[data-theme='dark'] :is(.sidebar-nav-label, .sidebar-item-badge) {
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] :is(.sidebar-item-main, .sidebar-item-utility) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .sidebar-item-main[aria-current='page'],
+  .sidebar-item-utility.active
+) {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .sidebar-item-utility.active {
+  background: color-mix(in srgb, var(--color-cat-work) 18%, var(--color-bg-elevated));
+  box-shadow: inset 3px 0 0 var(--color-cat-work);
+}
+
+html[data-theme='dark'] .sidebar-item-row:hover {
+  background: var(--theme-bg-hover);
+}
+
+html[data-theme='dark'] .sidebar-item-row.active {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 19%,
+    var(--color-bg-elevated)
+  );
+}
+
+html[data-theme='dark'] :is(
+  .sidebar-item-input,
+  .sidebar-add-input,
+  .sidebar-add-editor,
+  .sidebar-header-toggle,
+  .sidebar-icon-grid button,
+  .sidebar-add-actions button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .planning-panel-workspace-menu,
+  .workspace-dialog,
+  .workspace-dialog-field input,
+  .workspace-dialog-actions button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .planning-panel-workspace-menu button {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .planning-panel-workspace-menu button:hover,
+html[data-theme='dark'] .planning-panel-workspace-menu button:focus-visible {
+  background: var(--theme-bg-hover);
+}
+
+html[data-theme='dark'] .planning-panel-workspace-menu button.danger {
+  color: #fb9b85;
+}
+
+html[data-theme='dark'] .workspace-dialog-heading h2 {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .workspace-dialog-copy,
+  .workspace-dialog-field
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .workspace-dialog-icon {
+  background: color-mix(in srgb, var(--color-cat-work) 20%, var(--color-bg-elevated));
+}
+
+html[data-theme='dark'] .workspace-dialog-icon.danger {
+  background: color-mix(in srgb, #b9553f 20%, var(--color-bg-elevated));
+}
+
+html[data-theme='dark'] .workspace-dialog-actions button.primary {
+  border-color: #657cf1;
+  background: #516ff2;
+  color: #fff;
+}
+
+html[data-theme='dark'] .workspace-dialog-actions button.danger {
+  border-color: #c7654e;
+  background: #a84d39;
+  color: #fff;
+}
+
+html[data-theme='dark'] :is(
+  .sidebar-icon-grid button:hover,
+  .sidebar-icon-grid button.is-selected,
+  .sidebar-add-actions button:hover
+) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-overlay);
+}
+
+/* Main planning, selected-task, AI, and calendar surfaces */
+html[data-theme='dark'] :is(
+  .planning-panel,
+  .planning-surface,
+  .selected-panel,
+  .selected-surface,
+  .strategist-surface.is-embedded,
+  .calendar-shell,
+  .my-day-agenda
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--theme-bg-translucent);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-rest);
+}
+
+html[data-theme='dark'] :is(
+  .planning-panel-header,
+  .planning-surface-header,
+  .selected-panel-header,
+  .selected-surface-header,
+  .strategist-header,
+  .calendar-header,
+  .my-day-header
+) {
+  border-color: var(--color-border-subtle);
+}
+
+html[data-theme='dark'] :is(
+  .planning-panel-more-btn,
+  .planning-panel-add-btn,
+  .planning-ghost-btn,
+  .planning-tree-icon-btn,
+  .planning-detail-close-btn,
+  .strategist-header-btn,
+  .calendar-today-btn,
+  .calendar-nav-btn,
+  .calendar-picker-btn,
+  .my-day-header-actions button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  box-shadow: none;
+}
+
+html[data-theme='dark'] :is(
+  .planning-panel-more-btn:hover,
+  .planning-panel-add-btn:hover,
+  .planning-ghost-btn:hover,
+  .planning-tree-icon-btn:hover,
+  .planning-tree-icon-btn.is-active,
+  .planning-detail-close-btn:hover,
+  .strategist-header-btn:hover,
+  .calendar-nav-btn:hover,
+  .calendar-today-btn:hover,
+  .calendar-picker-btn:hover,
+  .my-day-header-actions button:hover:not(:disabled)
+) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+/* Planning tree and task details */
+html[data-theme='dark'] :is(
+  .planning-tree-search-shell,
+  .planning-tree-menu,
+  .planning-detail-notes,
+  .planning-detail-text-input,
+  .planning-detail-date-input,
+  .planning-detail-select,
+  .planning-detail-facts,
+  .planning-attachment-card,
+  .planning-detail-empty-surface,
+  .planning-empty-state,
+  .planning-strategist-launcher,
+  .planning-ai-input-shell
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .planning-tree-menu button:hover,
+  .planning-tree-menu button.is-active,
+  .planning-tree-action-btn:hover,
+  .planning-ai-chip-action:hover
+) {
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .planning-tree-filter-shelf {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] :is(
+  .planning-tree-filter-heading,
+  .planning-tree-filter-facet-label,
+  .planning-tree-filter-facet-state
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .planning-tree-filter-heading button:hover:not(:disabled) {
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .planning-tree-filter-chip {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .planning-tree-filter-check {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] .planning-tree-filter-facet.is-any .planning-tree-filter-chip.is-selected {
+  background: var(--color-bg-overlay);
+}
+
+html[data-theme='dark'] .planning-tree-filter-facet.is-restrictive .planning-tree-filter-chip.is-selected {
+  border-color: color-mix(in srgb, var(--color-cat-work) 48%, var(--color-border-subtle));
+  background: color-mix(in srgb, var(--color-cat-work) 16%, var(--color-bg-overlay));
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .planning-tree-applied-filters button:not(.clear-all) {
+  border-color: color-mix(in srgb, var(--color-cat-work) 42%, var(--color-border-subtle));
+  background: color-mix(in srgb, var(--color-cat-work) 14%, var(--color-bg-overlay));
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .planning-tree-filter-count {
+  border-color: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] :is(
+  .planning-tree-summary span,
+  .planning-detail-meta span,
+  .planning-backlog-count,
+  .planning-archive-count,
+  .planning-tag-chip,
+  .planning-context-chip,
+  .planning-ai-chip
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--theme-bg-soft);
+  color: var(--color-text-secondary);
+}
+
+/* Task tree cards and menus */
+html[data-theme='dark'] :is(
+  .node-card-row:hover,
+  .node-card:focus-visible > .node-card-row
+) {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 14%,
+    var(--color-bg-overlay) 86%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--cat-color, var(--color-cat-work)) 30%, transparent);
+}
+
+html[data-theme='dark'] .node-title-wrap:hover {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 10%,
+    var(--color-bg-surface) 90%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--cat-color, var(--color-cat-work)) 24%, transparent);
+}
+
+html[data-theme='dark'] .node-title-wrap:hover .node-title {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .node-card.is-archived .node-card-row {
+  background: var(--theme-bg-soft);
+}
+
+html[data-theme='dark'] .node-card.execution-selected > .node-card-row {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 10%,
+    var(--color-bg-elevated) 90%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--cat-color, var(--color-cat-work)) 24%, transparent);
+}
+
+html[data-theme='dark'] .node-card.execution-selected > .node-card-row:hover,
+html[data-theme='dark'] .node-card.execution-selected:focus-visible > .node-card-row {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 18%,
+    var(--color-bg-overlay) 82%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--cat-color, var(--color-cat-work)) 38%, transparent);
+}
+
+html[data-theme='dark'] .planning-tree-virtual-row.hover-descendant .node-card-row {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 8%,
+    var(--color-bg-surface) 92%
+  );
+}
+
+html[data-theme='dark'] .planning-tree-virtual-row.hover-ancestor .node-card-row {
+  background: color-mix(
+    in srgb,
+    var(--cat-color, var(--color-cat-work)) 12%,
+    var(--color-bg-overlay) 88%
+  );
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--cat-color, var(--color-cat-work)) 28%, transparent);
+}
+
+html[data-theme='dark'] :is(
+  .node-checkbox,
+  .node-emoji-badge,
+  .node-add-child-btn,
+  .node-meta-popover,
+  .node-meta-picker-input,
+  .node-emoji-picker-popover,
+  .node-context-menu,
+  .node-delete-dialog,
+  .node-delete-dialog-actions button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-popover);
+}
+
+html[data-theme='dark'] :is(
+  .node-chevron,
+  .node-priority-trigger,
+  .node-stage-trigger,
+  .node-context-menu-item,
+  .node-delete-dialog p
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .node-chevron:hover,
+  .node-priority-trigger:hover,
+  .node-priority-trigger.active,
+  .node-stage-trigger:hover,
+  .node-stage-trigger.active,
+  .node-context-menu-item:hover
+) {
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .node-state-pill.archived,
+  .node-state-icon.scheduled,
+  .node-state-icon.recurring,
+  .node-stage-count
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-secondary);
+}
+
+/* Selected tasks */
+html[data-theme='dark'] :is(
+  .selected-task-group,
+  .selected-stage-node-row,
+  .selected-schedulepatch-card,
+  .selected-proposal-metrics span,
+  .selected-proposal-notices li,
+  .selected-proposal-conflicts li
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .selected-stage-node.root > .selected-stage-node-row {
+  background: color-mix(in srgb, var(--color-cat-work) 10%, var(--color-bg-elevated));
+}
+
+html[data-theme='dark'] :is(
+  .selected-secondary-btn,
+  .selected-row-remove-btn,
+  .selected-proposal-actions button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+}
+
+/* Strategist chat and review documents */
+html[data-theme='dark'] :is(
+  .strategist-turn,
+  .strategist-feedback,
+  .strategist-decision-card,
+  .strategist-action-card,
+  .strategist-clarification-card,
+  .strategist-branch-card,
+  .strategist-compact-recurrence-card,
+  .strategist-preference-proposal-card,
+  .strategist-preference-rule,
+  .strategist-clarification-choice,
+  .strategist-composer,
+  .strategist-history-panel,
+  .strategist-history-item,
+  .strategist-input-shell,
+  .strategist-schedule-preview-list li,
+  .review-document-card,
+  .review-document-block,
+  .review-document-decision,
+  .review-document-status,
+  .review-document-tree-node,
+  .review-document-changes > li,
+  .review-document-conflicts > li
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .strategist-turn-user {
+  border-color: color-mix(in srgb, var(--color-cat-work) 34%, var(--color-border-subtle));
+  background: color-mix(in srgb, var(--color-cat-work) 16%, var(--color-bg-elevated));
+}
+
+html[data-theme='dark'] .strategist-turn-user p:last-child {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .strategist-badge-preview,
+  .strategist-badge-chip,
+  .strategist-working-set-chip,
+  .strategist-conflict-detail-list li,
+  .review-document-tree-meta small
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .review-document-edit-form textarea,
+  .review-document-secondary-action
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+}
+
+/* Calendar */
+html[data-theme='dark'] :is(
+  .calendar-view-switch,
+  .calendar-time-rail,
+  .calendar-axis-corner,
+  .calendar-date-axis,
+  .calendar-week-time-grid,
+  .calendar-week-grid,
+  .calendar-month-grid
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] .calendar-view-btn.is-active {
+  background: color-mix(in srgb, var(--color-cat-work) 18%, var(--color-bg-overlay));
+  color: #aebaff;
+}
+
+html[data-theme='dark'] :is(
+  .calendar-day-track,
+  .calendar-week-cell,
+  .calendar-month-cell
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-surface);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-week-cell.is-current,
+  .calendar-month-cell.is-current,
+  .calendar-month-cell.is-today
+) {
+  background: color-mix(in srgb, var(--color-cat-work) 9%, var(--color-bg-surface));
+}
+
+html[data-theme='dark'] .calendar-month-cell.is-outside-month {
+  background: color-mix(in srgb, var(--color-bg-base) 72%, var(--color-bg-surface));
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-time-label,
+  .calendar-date-axis-cell,
+  .calendar-month-cell header,
+  .calendar-hierarchy-summary
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .calendar-time-label {
+  background: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] .calendar-time-label::after {
+  border-color: var(--color-border-subtle);
+}
+
+html[data-theme='dark'] .calendar-detail-control input::-webkit-slider-runnable-track {
+  background: var(--color-border-strong);
+}
+
+html[data-theme='dark'] .calendar-detail-control input::-webkit-slider-thumb {
+  border-color: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] .calendar-detail-control input::-moz-range-track {
+  background: var(--color-border-strong);
+}
+
+html[data-theme='dark'] .calendar-detail-control input::-moz-range-thumb {
+  border-color: var(--color-bg-elevated);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-block-popover,
+  .calendar-popover-hierarchy,
+  .calendar-popover-facts,
+  .calendar-popover-tree-row
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-popover);
+}
+
+html[data-theme='dark'] .calendar-popover-layer {
+  background: rgba(3, 8, 18, 0.48);
+}
+
+html[data-theme='dark'] .calendar-popover-heading {
+  color: color-mix(in srgb, var(--block-color) 56%, #edf3ff 44%);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-popover-heading button,
+  .calendar-popover-actions button,
+  .calendar-popover-edit button
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-popover-heading button:hover,
+  .calendar-popover-actions button:hover,
+  .calendar-popover-edit button:hover
+) {
+  background: var(--color-bg-overlay);
+}
+
+html[data-theme='dark'] .calendar-popover-body h3 {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-popover-body p,
+  .calendar-popover-subcopy,
+  .calendar-popover-empty
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .calendar-popover-icon {
+  border: 1px solid color-mix(in srgb, var(--block-color) 58%, #dce8ff 42%);
+  background: color-mix(
+    in srgb,
+    var(--block-color) 34%,
+    var(--color-bg-elevated) 66%
+  );
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .calendar-rollover-callout {
+  border-color: color-mix(
+    in srgb,
+    var(--block-color) 34%,
+    var(--color-border-strong) 66%
+  );
+  background: color-mix(
+    in srgb,
+    var(--block-color) 10%,
+    var(--color-bg-elevated) 90%
+  );
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .calendar-popover-hierarchy .calendar-thread-row {
+  border-color: color-mix(
+    in srgb,
+    var(--block-color) 28%,
+    var(--color-border-subtle) 72%
+  );
+  background: color-mix(
+    in srgb,
+    var(--block-color) 16%,
+    var(--color-bg-overlay) 84%
+  );
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-popover-hierarchy .calendar-thread-title,
+  .calendar-popover-hierarchy .calendar-thread-estimate
+) {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .calendar-popover-hierarchy .calendar-thread-row input {
+  border-color: color-mix(in srgb, var(--block-color) 62%, #dce8ff 38%);
+  background: var(--color-bg-surface);
+}
+
+html[data-theme='dark'] .calendar-popover-facts dt {
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] .calendar-popover-facts dd {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .calendar-fact-icon {
+  border: 1px solid color-mix(in srgb, var(--block-color) 42%, var(--color-border-strong));
+  background: color-mix(
+    in srgb,
+    var(--block-color) 22%,
+    var(--color-bg-overlay) 78%
+  );
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-agenda-block,
+  .calendar-grid-block
+) {
+  border-color: color-mix(in srgb, var(--block-color) 68%, #dce8ff 32%);
+  border-width: 1px;
+  background: color-mix(
+    in srgb,
+    var(--block-color) 34%,
+    var(--color-bg-surface) 66%
+  );
+  color: var(--color-text-primary);
+  box-shadow: none;
+}
+
+html[data-theme='dark'] :is(
+  .calendar-agenda-block,
+  .calendar-grid-block
+):hover {
+  border-color: color-mix(in srgb, var(--block-color) 76%, #edf3ff 24%);
+  background: color-mix(
+    in srgb,
+    var(--block-color) 42%,
+    var(--color-bg-surface) 58%
+  );
+}
+
+html[data-theme='dark'] :is(
+  .calendar-agenda-block .calendar-block-title,
+  .calendar-grid-block .calendar-grid-block-title
+) {
+  color: var(--color-text-primary);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-agenda-block .calendar-block-time,
+  .calendar-agenda-block .calendar-block-continuation,
+  .calendar-agenda-block .calendar-block-meta,
+  .calendar-grid-block .calendar-grid-block-time
+) {
+  color: color-mix(in srgb, var(--block-color) 22%, #dce8ff 78%);
+}
+
+html[data-theme='dark'] .calendar-agenda-block .calendar-block-identity {
+  border: 1px solid color-mix(in srgb, var(--block-color) 64%, #dce8ff 36%);
+  background: color-mix(
+    in srgb,
+    var(--block-color) 44%,
+    var(--color-bg-elevated) 56%
+  );
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .calendar-agenda-block.variant-draft,
+  .calendar-agenda-block.variant-proposed,
+  .calendar-grid-block.variant-draft,
+  .calendar-grid-block.variant-proposed
+) {
+  background: color-mix(
+    in srgb,
+    var(--block-color) 24%,
+    var(--color-bg-surface) 76%
+  );
+}
+
+html[data-theme='dark'] .calendar-agenda-block.variant-protected {
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, var(--block-color) 38%, var(--color-bg-surface) 62%) 0,
+      color-mix(in srgb, var(--block-color) 38%, var(--color-bg-surface) 62%) 7px,
+      color-mix(in srgb, var(--block-color) 24%, var(--color-bg-surface) 76%) 7px,
+      color-mix(in srgb, var(--block-color) 24%, var(--color-bg-surface) 76%) 14px
+    );
+}
+
+html[data-theme='dark'] :is(
+  .calendar-agenda-block.is-rollover,
+  .calendar-grid-block.is-rollover
+) {
+  border-color: color-mix(
+    in srgb,
+    var(--block-color) 46%,
+    var(--color-state-rollover) 54%
+  );
+  background: color-mix(
+    in srgb,
+    var(--block-color) 18%,
+    var(--color-state-rollover-tint) 82%
+  );
+}
+
+/* My Day */
+html[data-theme='dark'] .my-day-agenda {
+  --agenda-ink: var(--color-text-primary);
+  --agenda-muted: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .my-day-overview,
+  .my-day-progress,
+  .my-day-agenda-card,
+  .my-day-state,
+  .my-day-empty,
+  .my-day-focus-empty,
+  .my-day-focus-list button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .my-day-header h1,
+  .my-day-overview-copy strong,
+  .my-day-metric strong,
+  .my-day-section-heading h2,
+  .my-day-task-copy strong,
+  .my-day-empty h3,
+  .my-day-focus-list strong
+) {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .my-day-subtitle,
+  .my-day-overview-copy span,
+  .my-day-metric span,
+  .my-day-section-heading > span,
+  .my-day-timeline > li > time,
+  .my-day-task-copy > span,
+  .my-day-empty p,
+  .my-day-focus-list small
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .my-day-eyebrow,
+  .my-day-section-heading p
+) {
+  color: #9fb0cb;
+}
+
+html[data-theme='dark'] .my-day-progress {
+  background:
+    radial-gradient(
+      circle at center,
+      var(--color-bg-elevated) 58%,
+      transparent 60%
+    ),
+    conic-gradient(
+      var(--color-cat-work) var(--agenda-progress),
+      var(--color-bg-overlay) 0
+    );
+}
+
+html[data-theme='dark'] .my-day-progress span {
+  color: #aebaff;
+}
+
+html[data-theme='dark'] :is(
+  .my-day-metric,
+  .my-day-focus-column
+) {
+  border-color: var(--color-border-subtle);
+}
+
+html[data-theme='dark'] .my-day-timeline-node::before {
+  background: var(--color-border-strong);
+}
+
+html[data-theme='dark'] .my-day-timeline-node::after {
+  border-color: var(--color-bg-surface);
+  background: var(--color-text-muted);
+  box-shadow: 0 0 0 1px var(--color-border-strong);
+}
+
+html[data-theme='dark'] .my-day-date-nav .my-day-today-button:disabled {
+  background: var(--color-bg-overlay);
+  color: var(--color-text-secondary);
+  opacity: 1;
+}
+
+html[data-theme='dark'] .my-day-agenda-card {
+  border-color: color-mix(
+    in srgb,
+    var(--agenda-color) 46%,
+    var(--color-border-subtle) 54%
+  );
+  border-left-color: color-mix(in srgb, var(--agenda-color) 80%, #ffffff 20%);
+  background: color-mix(
+    in srgb,
+    var(--agenda-color) 18%,
+    var(--color-bg-elevated) 82%
+  );
+}
+
+html[data-theme='dark'] .my-day-agenda-card:hover {
+  border-color: var(--color-border-strong);
+  background: color-mix(
+    in srgb,
+    var(--agenda-color) 26%,
+    var(--color-bg-overlay) 74%
+  );
+}
+
+html[data-theme='dark'] :is(
+  .my-day-status,
+  .my-day-recurring,
+  .my-day-task-emoji,
+  .my-day-focus-emoji
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .my-day-task-emoji {
+  background: color-mix(
+    in srgb,
+    var(--agenda-color) 30%,
+    var(--color-bg-overlay) 70%
+  );
+}
+
+html[data-theme='dark'] .my-day-complete-button {
+  border-color: color-mix(
+    in srgb,
+    var(--agenda-color) 54%,
+    var(--color-border-strong) 46%
+  );
+  background: var(--color-bg-surface);
+}
+
+/* Settings */
+html[data-theme='dark'] :is(
+  .settings-submenu,
+  .settings-auth-card,
+  .settings-provider-card,
+  .settings-byok-card,
+  .settings-codex-card,
+  .settings-calendar-card,
+  .settings-memory-card,
+  .settings-auth-summary-card
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-surface);
+}
+
+html[data-theme='dark'] :is(
+  .settings-submenu-btn,
+  .settings-auth-provider,
+  .settings-auth-pill,
+  .settings-auth-status-item,
+  .settings-auth-code-block,
+  .settings-provider-choice,
+  .settings-memory-empty,
+  .settings-memory-item,
+  .settings-memory-action-btn,
+  .settings-memory-icon-btn,
+  .settings-memory-editor,
+  .settings-memory-search,
+  .settings-memory-view,
+  .settings-memory-field input,
+  .settings-memory-field select,
+  .settings-memory-field textarea,
+  .settings-memory-secondary-btn,
+  .settings-byok-input
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .settings-submenu-btn:hover,
+  .settings-submenu-btn.is-active,
+  .settings-provider-choice.is-active,
+  .settings-memory-action-btn:hover,
+  .settings-memory-icon-btn:hover
+) {
+  border-color: var(--color-border-strong);
+  background: color-mix(in srgb, var(--color-cat-work) 14%, var(--color-bg-overlay));
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-card {
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--color-cat-growth) 8%, var(--color-bg-surface)) 0%,
+    var(--color-bg-surface) 72%
+  );
+}
+
+html[data-theme='dark'] .settings-memory-card .settings-auth-pill {
+  border-color: color-mix(
+    in srgb,
+    var(--color-cat-growth) 30%,
+    var(--color-border-subtle) 70%
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-cat-growth) 14%,
+    var(--color-bg-elevated) 86%
+  );
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-item {
+  border-color: color-mix(
+    in srgb,
+    var(--color-cat-growth) 16%,
+    var(--color-border-subtle) 84%
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-cat-growth) 6%,
+    var(--color-bg-elevated) 94%
+  );
+}
+
+html[data-theme='dark'] .settings-memory-item.is-disabled {
+  background: var(--color-bg-surface);
+}
+
+html[data-theme='dark'] .settings-memory-item.has-issue {
+  border-color: color-mix(in srgb, #e5a84c 54%, var(--color-border-subtle) 46%);
+}
+
+html[data-theme='dark'] .settings-memory-heading-row strong {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-main p {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .settings-memory-status {
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-cat-growth) 32%,
+    var(--color-border-subtle) 68%
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-cat-growth) 20%,
+    var(--color-bg-overlay) 80%
+  );
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-status.disabled {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-muted);
+}
+
+html[data-theme='dark'] .settings-memory-meta span {
+  border: 1px solid color-mix(
+    in srgb,
+    var(--color-cat-growth) 14%,
+    var(--color-border-subtle) 86%
+  );
+  background: color-mix(
+    in srgb,
+    var(--color-cat-growth) 8%,
+    var(--color-bg-overlay) 92%
+  );
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .settings-memory-action-btn {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-item .settings-memory-icon-btn {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-action-btn.is-delete {
+  color: #ff9aa8;
+}
+
+html[data-theme='dark'] .settings-memory-icon-btn.is-primary,
+html[data-theme='dark'] .settings-memory-primary-btn,
+html[data-theme='dark'] .settings-memory-view button.is-active {
+  border-color: #6f9bd3;
+  background: #4774ae;
+  color: white;
+}
+
+html[data-theme='dark'] .settings-memory-icon-btn.is-delete {
+  color: #ff9aa8;
+}
+
+html[data-theme='dark'] .settings-memory-search input,
+html[data-theme='dark'] .settings-memory-field :is(input, select, textarea) {
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] .settings-memory-field > span,
+html[data-theme='dark'] .settings-memory-view button {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] .settings-memory-issue {
+  background: color-mix(in srgb, #bd7b21 18%, var(--color-bg-overlay) 82%);
+  color: #f2c77e;
+}
+
+/* Recurrence and delete dialogs */
+html[data-theme='dark'] :is(
+  .recurrence-dialog,
+  .recurrence-segmented-control,
+  .recurrence-dialog-field input,
+  .recurrence-end-date > input,
+  .recurrence-duration-input,
+  .recurrence-dialog-note,
+  .recurrence-dialog-cancel
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .recurrence-segmented-control button,
+  .recurrence-weekdays button,
+  .recurrence-dialog-close
+) {
+  color: var(--color-text-secondary);
+}
+
+html[data-theme='dark'] :is(
+  .recurrence-segmented-control button.active,
+  .recurrence-weekdays button.selected,
+  .recurrence-dialog-close:hover
+) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+/* Rich content */
+html[data-theme='dark'] :is(
+  .ai-task-reference,
+  .ai-task-reference-icon,
+  .ai-math-display
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+/* Architecture admin */
+html[data-theme='dark'] .architecture-admin {
+  background:
+    radial-gradient(circle at top left, rgba(77, 91, 190, 0.17), transparent 30%),
+    var(--color-bg-base);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .architecture-hero,
+  .architecture-definition,
+  .architecture-panel,
+  .contract-detail,
+  .contract-browser,
+  .trace-session-browser,
+  .trace-detail,
+  .data-browser,
+  .data-detail,
+  .rollout,
+  .debug-chat-workbench,
+  .flow-selection-guide,
+  .architecture-chat-host,
+  .live-runner,
+  .loop-toolbar,
+  .agent-loop-layout,
+  .replay-console,
+  .live-output,
+  .loop-node-inspector,
+  .event-inspector,
+  .saved-trace-summary
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-surface);
+  color: var(--color-text-primary);
+  box-shadow: var(--shadow-rest);
+}
+
+html[data-theme='dark'] :is(
+  .architecture-provider-card,
+  .architecture-stats div,
+  .pipeline-step,
+  .pipeline-contract,
+  .pipeline-agent,
+  .pipeline-execution,
+  .pipeline-interaction,
+  .skill-card,
+  .contract-field,
+  .contract-output,
+  .trace-event,
+  .loop-node,
+  .inspector-layer,
+  .loop-node-inspector dl div,
+  .replay-summary-grid > div,
+  .event-rail,
+  .saved-trace-summary article,
+  .flow-rule-grid > button
+) {
+  border-color: var(--color-border-subtle);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .architecture-tabs button:hover,
+  .architecture-tabs button.is-active,
+  .contract-tool-list button:hover,
+  .contract-tool-list button.is-active,
+  .data-browser > button:hover,
+  .data-browser > button.is-active,
+  .trace-session-browser > button:hover,
+  .trace-session-browser > button.is-active,
+  .event-rail button:hover,
+  .event-rail button.is-active,
+  .flow-rule-grid > button:hover,
+  .flow-rule-grid > button.is-observed
+) {
+  border-color: var(--color-border-strong);
+  background: var(--color-bg-overlay);
+  color: var(--color-text-primary);
+}
+
+html[data-theme='dark'] :is(
+  .contract-detail pre,
+  .trace-event pre,
+  .event-inspector pre,
+  .live-output pre,
+  .contract-skill-index code,
+  .live-runner textarea,
+  .replay-console select
+) {
+  border-color: var(--color-border-subtle);
+  background: #0a1020;
+  color: #dce8ff;
+}
+
+/* Scrollbars */
+html[data-theme='dark'] * {
+  scrollbar-color: var(--color-border-strong) transparent;
+}
+
+html[data-theme='dark'] *::-webkit-scrollbar-thumb {
+  background: var(--color-border-strong);
+}
+
+html[data-theme='dark'] *::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -1,0 +1,291 @@
+.recurrence-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(28 35 52 / 34%);
+  backdrop-filter: blur(2px);
+}
+
+.recurrence-dialog {
+  width: min(560px, 100%);
+  max-height: min(760px, calc(100vh - 48px));
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid #dfe5ef;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgb(50 61 86 / 24%);
+  color: #20304d;
+}
+
+.recurrence-dialog-header,
+.recurrence-dialog-heading,
+.recurrence-dialog-heading-icon,
+.recurrence-dialog-field > span,
+.recurrence-dialog-fieldset legend,
+.recurrence-dialog-actions,
+.recurrence-duration-input {
+  display: flex;
+  align-items: center;
+}
+
+.recurrence-dialog-header {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.recurrence-dialog-heading {
+  flex: 1;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.recurrence-dialog-heading-icon {
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 11px;
+  background: #eef2ff;
+  color: #4f63dc;
+}
+
+.recurrence-dialog h2 {
+  margin: 1px 0 4px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.recurrence-dialog-heading p,
+.recurrence-dialog-note {
+  margin: 0;
+  color: #687896;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.recurrence-dialog-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: #6b7892;
+  cursor: pointer;
+}
+
+.recurrence-dialog-close:hover {
+  background: #f3f5f9;
+}
+
+.recurrence-dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.recurrence-dialog-fieldset {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.recurrence-dialog-fieldset legend,
+.recurrence-dialog-field > span {
+  gap: 6px;
+  margin-bottom: 7px;
+  color: #445473;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.recurrence-segmented-control {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 3px;
+  border: 1px solid #dfe5ef;
+  border-radius: 11px;
+  background: #f7f8fb;
+}
+
+.recurrence-segmented-control button {
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #61708c;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recurrence-segmented-control button.active {
+  background: #fff;
+  color: #4056d4;
+  box-shadow: 0 1px 4px rgb(41 54 87 / 14%);
+}
+
+.recurrence-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.recurrence-weekdays button {
+  min-width: 0;
+  padding: 8px 2px;
+  border: 1px solid #dfe5ef;
+  border-radius: 9px;
+  background: #fff;
+  color: #61708c;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recurrence-weekdays button.selected {
+  border-color: #8390e8;
+  background: #eef2ff;
+  color: #4056d4;
+}
+
+.recurrence-dialog-field {
+  display: block;
+}
+
+.recurrence-dialog-field input,
+.recurrence-end-date > input,
+.recurrence-duration-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid #dfe5ef;
+  border-radius: 10px;
+  background: #fff;
+  color: #253552;
+  font: inherit;
+}
+
+.recurrence-dialog-field input,
+.recurrence-end-date > input {
+  padding: 8px 10px;
+}
+
+.recurrence-duration-input {
+  padding-right: 10px;
+}
+
+.recurrence-duration-input input {
+  min-width: 0;
+  border: 0;
+}
+
+.recurrence-duration-input span {
+  color: #7a879f;
+  font-size: 12px;
+}
+
+.recurrence-end-date {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.recurrence-end-date label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #445473;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recurrence-dialog-note {
+  margin-top: 17px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #f7f8fb;
+}
+
+.recurrence-dialog-error {
+  margin: 10px 0 0;
+  padding: 9px 11px;
+  border-radius: 9px;
+  background: #fff4ee;
+  color: #9a4b2c;
+  font-size: 13px;
+}
+
+.recurrence-dialog-actions {
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.recurrence-dialog-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.recurrence-dialog-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.recurrence-dialog-action-spacer {
+  flex: 1;
+}
+
+.recurrence-dialog-stop {
+  border: 1px solid #ead8d2;
+  background: #fff;
+  color: #a14f36;
+}
+
+.recurrence-dialog-cancel {
+  border: 1px solid #dfe5ef;
+  background: #fff;
+  color: #52617c;
+}
+
+.recurrence-dialog-save {
+  border: 1px solid #4056d4;
+  background: #4056d4;
+  color: #fff;
+}
+
+@media (max-width: 620px) {
+  .recurrence-dialog-backdrop {
+    align-items: end;
+    padding: 0;
+  }
+
+  .recurrence-dialog {
+    max-height: 92vh;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .recurrence-dialog-grid,
+  .recurrence-end-date {
+    grid-template-columns: 1fr;
+  }
+
+  .recurrence-dialog-actions {
+    flex-wrap: wrap;
+  }
+}

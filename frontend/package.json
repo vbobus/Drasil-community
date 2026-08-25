@@ -1,0 +1,46 @@
+{
+  "name": "drasil-web",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "eslint .",
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:local": "node ./scripts/run-playwright-local.mjs",
+    "test:e2e:agent-kernel-gate": "node ./scripts/run-agent-kernel-browser-gate.mjs",
+    "test:e2e:local:headed": "node ./scripts/run-playwright-local.mjs --headed",
+    "test:e2e:local:debug": "node ./scripts/run-playwright-local.mjs --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:report": "playwright show-report",
+    "test:e2e:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "emoogle-emoji-picker": "^1.0.2",
+    "katex": "^0.17.0",
+    "lucide-react": "^1.24.0",
+    "react": "^19.2.5",
+    "react-dom": "^19.2.5",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@faker-js/faker": "^9.9.0",
+    "@playwright/test": "^1.55.0",
+    "@types/node": "^24.12.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.1",
+    "eslint": "^10.2.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.2",
+    "globals": "^17.5.0",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.58.2",
+    "vite": "^8.0.10"
+  }
+}

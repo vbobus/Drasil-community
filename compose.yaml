@@ -1,0 +1,28 @@
+services:
+  drasil:
+    build:
+      context: .
+    image: drasil:local
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DRASIL_AUTH_DATABASE_PATH: /var/lib/drasil/drasil-auth.db
+      DRASIL_ACCOUNT_DATA_ROOT: /var/lib/drasil/accounts
+      DRASIL_LEGACY_DATABASE_PATH: /var/lib/drasil/drasil.db
+      DRASIL_WEB_DIST: /opt/drasil/web
+    ports:
+      - "${DRASIL_BIND_ADDRESS:-127.0.0.1}:${DRASIL_PORT:-8000}:8000"
+    volumes:
+      - drasil-data:/var/lib/drasil
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+
+volumes:
+  drasil-data:

@@ -1,0 +1,295 @@
+/* ============================================================
+   DRASIL — DESIGN TOKENS
+   "Calm Tactile Productivity OS"
+   ============================================================
+   Architecture: All tokens defined as CSS Custom Properties at
+   :root. Components consume these variables exclusively — no
+   hardcoded values allowed in component CSS files.
+
+   UX Source: ux-design-specification.md § Visual Design Foundation
+   ============================================================ */
+
+/* ============================================================
+   RESET & BASE
+   ============================================================ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ============================================================
+   ROOT DESIGN TOKENS
+   ============================================================ */
+:root {
+
+  /* ----------------------------------------------------------
+     1. FOUNDATION — Neutral Canvas (UX-DR1)
+     Slightly off-white warm slate to reduce eye strain vs pure
+     white. All backgrounds derive from this palette.
+     ---------------------------------------------------------- */
+  --color-bg-base:      #f8fafc;  /* Page / app canvas background     */
+  --color-bg-surface:   #ffffff;  /* Card / panel surface              */
+  --color-bg-elevated:  #f1f5f9;  /* Sidebar, secondary panels         */
+  --color-bg-overlay:   #e2e8f0;  /* Hover states, dividers            */
+
+  /* Foreground / text */
+  --color-text-primary:   #1e293b;  /* Headings, primary content       */
+  --color-text-secondary: #475569;  /* Labels, metadata                */
+  --color-text-muted:     #94a3b8;  /* Disabled, placeholders          */
+  --color-text-inverse:   #f8fafc;  /* Text on dark/accent backgrounds */
+
+  /* Borders */
+  --color-border-subtle: #e2e8f0;   /* 1px default component border    */
+  --color-border-strong: #cbd5e1;   /* Focused / hover border          */
+
+  /* ----------------------------------------------------------
+     2. CATEGORY ACCENT COLORS (UX-DR1)
+     7 default life categories. Muted / desaturated tones —
+     used for tags, tree icons, calendar block backgrounds.
+     Designed to feel cohesive, NOT rainbow-chaotic.
+     Each category has: main accent + a soft tint for backgrounds.
+     ---------------------------------------------------------- */
+
+  /* Work */
+  --color-cat-work:         #6366f1;   /* Indigo      */
+  --color-cat-work-tint:    #eef2ff;
+
+  /* Health */
+  --color-cat-health:       #10b981;   /* Emerald     */
+  --color-cat-health-tint:  #ecfdf5;
+
+  /* Home / Chores */
+  --color-cat-home:         #f59e0b;   /* Amber       */
+  --color-cat-home-tint:    #fffbeb;
+
+  /* Finance */
+  --color-cat-finance:      #0ea5e9;   /* Sky blue    */
+  --color-cat-finance-tint: #f0f9ff;
+
+  /* Social */
+  --color-cat-social:       #ec4899;   /* Pink        */
+  --color-cat-social-tint:  #fdf2f8;
+
+  /* Personal Growth */
+  --color-cat-growth:       #8b5cf6;   /* Violet      */
+  --color-cat-growth-tint:  #f5f3ff;
+
+  /* Leisure */
+  --color-cat-leisure:      #14b8a6;   /* Teal        */
+  --color-cat-leisure-tint: #f0fdfa;
+
+  /* ----------------------------------------------------------
+     3. SEMANTIC / STATE COLORS (Compassionate UI)
+     NO glaring reds for overdue/missed tasks.
+     Neutral ambers and grays enforce the "forgiveness" principle.
+     ---------------------------------------------------------- */
+  --color-state-success:      #10b981;  /* Completion, confirmed         */
+  --color-state-success-tint: #ecfdf5;
+  --color-state-warning:      #f59e0b;  /* Needs attention (NOT alarm)   */
+  --color-state-warning-tint: #fffbeb;
+  --color-state-info:         #6366f1;  /* AI proposals, in-progress     */
+  --color-state-info-tint:    #eef2ff;
+  --color-state-rollover:     #94a3b8;  /* Missed/past-due — NEVER red   */
+  --color-state-rollover-tint: #f8fafc;
+  /* Protected habit / blocked — translucent stripe pattern via CSS */
+  --color-state-blocked:      #cbd5e1;
+
+  /* ----------------------------------------------------------
+     4. SPACING — 8px GRID SCALE (UX-DR1)
+     All spacing values are multiples of 8px for rhythmic layout.
+     ---------------------------------------------------------- */
+  --space-1:  4px;    /* 0.5× — tight internal padding              */
+  --space-2:  8px;    /* 1×  — base unit                            */
+  --space-3:  12px;   /* 1.5×                                       */
+  --space-4:  16px;   /* 2×  — standard component padding           */
+  --space-5:  20px;   /* 2.5×                                       */
+  --space-6:  24px;   /* 3×  — section gaps                         */
+  --space-8:  32px;   /* 4×  — card gutters, layout gaps            */
+  --space-10: 40px;   /* 5×                                         */
+  --space-12: 48px;   /* 6×  — page section separators              */
+  --space-16: 64px;   /* 8×  — large layout regions                 */
+  --space-20: 80px;   /* 10× — hero/splash spacing                  */
+
+  /* ----------------------------------------------------------
+     5. TYPOGRAPHY
+     Primary: Inter (loaded via Google Fonts in index.html).
+     Scale uses rem for browser accessibility setting respect.
+     ---------------------------------------------------------- */
+  --font-family-base: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Fira Code', monospace; /* time labels */
+
+  /* Font weights */
+  --font-weight-regular:  400;
+  --font-weight-medium:   500;
+  --font-weight-semibold: 600;
+  --font-weight-bold:     700;
+
+  /* Type scale */
+  --text-xs:   0.75rem;   /* 12px — metadata, timestamps             */
+  --text-sm:   0.875rem;  /* 14px — card body, labels                */
+  --text-base: 1rem;      /* 16px — standard body text               */
+  --text-lg:   1.125rem;  /* 18px — card titles, section headers     */
+  --text-xl:   1.25rem;   /* 20px — sub-page titles                  */
+  --text-2xl:  1.5rem;    /* 24px — page/strategy node titles        */
+  --text-3xl:  1.875rem;  /* 30px — hero headings                    */
+
+  --line-height-tight:  1.25;
+  --line-height-base:   1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Letter spacing */
+  --tracking-tight:  -0.015em;
+  --tracking-normal: 0em;
+  --tracking-wide:   0.05em;   /* Uppercase labels / metadata         */
+
+  /* ----------------------------------------------------------
+     6. ELEVATION — Shadow Tokens (UX-DR2)
+     3-tier system: resting → hover → dragging.
+     Soft shadows lift components off the canvas giving the
+     "tactile" physical feel central to the design direction.
+     ---------------------------------------------------------- */
+
+  /* Resting state — card sitting on the canvas */
+  --shadow-rest:
+    0 1px 2px 0 rgba(15, 23, 42, 0.04),
+    0 1px 3px 0 rgba(15, 23, 42, 0.06);
+
+  /* Hover state — card responding to cursor */
+  --shadow-hover:
+    0 4px 6px -1px rgba(15, 23, 42, 0.07),
+    0 2px 4px -1px rgba(15, 23, 42, 0.05);
+
+  /* Dragging state — card lifted off canvas */
+  --shadow-drag:
+    0 20px 25px -5px rgba(15, 23, 42, 0.10),
+    0 8px 10px -6px rgba(15, 23, 42, 0.08);
+
+  /* Focused / popover — above dragging cards */
+  --shadow-popover:
+    0 25px 50px -12px rgba(15, 23, 42, 0.25);
+
+  /* ----------------------------------------------------------
+     7. BORDER RADIUS
+     Consistent rounding for the "approachable but structured" feel.
+     ---------------------------------------------------------- */
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-base: 8px;
+  --radius-md:   10px;
+  --radius-lg:   12px;
+  --radius-xl:   16px;
+  --radius-2xl:  20px;
+  --radius-full: 9999px;  /* Pills / tags */
+
+  /* ----------------------------------------------------------
+     8. TRANSITIONS & MOTION
+     Subtle — all transitions wrapped in prefers-reduced-motion.
+     ---------------------------------------------------------- */
+  --duration-fast:   120ms;
+  --duration-base:   200ms;
+  --duration-slow:   350ms;
+  --ease-standard:   cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* ----------------------------------------------------------
+     9. Z-INDEX SCALE
+     Prevents stacking context conflicts in complex drag-and-drop
+     layouts.
+     ---------------------------------------------------------- */
+  --z-base:    0;
+  --z-raised:  10;
+  --z-dropdown: 100;
+  --z-sticky:  200;
+  --z-overlay: 300;
+  --z-modal:   400;
+  --z-toast:   500;
+
+  /* ----------------------------------------------------------
+     10. LAYOUT
+     ---------------------------------------------------------- */
+  --sidebar-width:          220px;
+  --sidebar-collapsed-width: 56px;
+  --layout-max-width:       1440px;
+  --calendar-time-rail-width: 72px;
+  --calendar-grid-height: 560px;
+  --calendar-accent: var(--color-cat-work);
+  --calendar-accent-surface: var(--color-cat-work-tint);
+}
+
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-family-base);
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-base);
+  color: var(--color-text-primary);
+  background-color: var(--color-bg-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Typography resets */
+h1, h2, h3, h4, h5, h6 {
+  line-height: var(--line-height-tight);
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--font-weight-semibold);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+}
+
+/* ============================================================
+   REDUCED MOTION SUPPORT (Accessibility)
+   All tactile micro-animations MUST live inside standard media
+   queries and are disabled here for users who need it.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ============================================================
+   APP ROOT LAYOUT SHELL
+   ============================================================ */
+#root {
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.app-root {
+  display: flex;
+  min-height: 100dvh;
+  background-color: var(--color-bg-base);
+}

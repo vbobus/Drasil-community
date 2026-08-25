@@ -1,0 +1,32 @@
+{
+  "id": "workload-prioritization",
+  "version": "1.0.0",
+  "title": "Workload Prioritization",
+  "summary": "Inspect a current task scope and recommend what to focus on using urgency, effort, leverage, dependencies, and evidence coverage.",
+  "available_to": ["strategist", "planner"],
+  "use_for": [
+    "ranking work and choosing what to do next",
+    "identifying urgent or overdue tasks",
+    "finding low-hanging fruit or high-leverage work",
+    "reviewing a category or full workspace workload"
+  ],
+  "not_for": [
+    "directly applying task changes",
+    "resolving one exact task title without analysis"
+  ],
+  "recommended_tools": [
+    "query_task_graph",
+    "get_workload_overview",
+    "list_tasks_by_filter",
+    "get_task_snapshot",
+    "get_task_branch"
+  ],
+  "compatible_output_modes": ["analysis", "recommendation", "proposal"],
+  "evidence_requirements": {
+    "scope_freshness": "current_turn",
+    "candidate_search_is_sufficient": false,
+    "coverage_must_be_reported": true
+  },
+  "dependencies": [],
+  "maximum_loaded_characters": 7000
+}

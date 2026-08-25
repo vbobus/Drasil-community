@@ -1,0 +1,14 @@
+{
+  "id": "metadata-maintenance",
+  "version": "1.0.0",
+  "title": "Task Metadata Maintenance",
+  "summary": "Review and propose precise status, priority, deadline, estimate, notes, tag, or related metadata changes for exact tasks.",
+  "available_to": ["strategist", "planner"],
+  "use_for": ["adding estimates", "changing deadlines or priority", "marking tasks complete", "repairing missing task metadata"],
+  "not_for": ["read-only prioritization", "direct database mutation"],
+  "recommended_tools": ["search_entities", "get_task_metadata", "get_task_branch", "submit_task_metadata_plan"],
+  "compatible_output_modes": ["analysis", "proposal"],
+  "evidence_requirements": {"exact_targets_required_for_proposal": true, "current_values_checked": true},
+  "dependencies": [],
+  "maximum_loaded_characters": 5000
+}
