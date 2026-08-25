@@ -1,6 +1,8 @@
 import { expect, test } from '../support/fixtures';
 import { mockCalendarBlocks, mockScheduleDryRun } from '../support/helpers/network';
 
+test.use({ timezoneId: 'America/Vancouver' });
+
 test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
   test.beforeEach(async ({ page }) => {
     await page.clock.setFixedTime(new Date('2026-06-18T08:00:00-07:00'));
