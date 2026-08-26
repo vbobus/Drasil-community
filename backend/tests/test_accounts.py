@@ -89,6 +89,35 @@ class AccountIsolationTests(unittest.TestCase):
         self.assertNotEqual(alex_private_path, blair_private_path)
         self.assertFalse(blair_private_path.exists())
 
+    def test_new_accounts_receive_the_default_workspaces(self) -> None:
+        expected_workspaces = [
+            "Work",
+            "Health",
+            "Home",
+            "Finance",
+            "Social",
+            "Personal Growth",
+            "Leisure",
+        ]
+        account = create_account(
+            username="community-user",
+            display_name="Community User",
+            password="community-password-123",
+        )
+
+        initialize_account_database(account)
+
+        with use_account(account):
+            with Session(get_active_engine()) as session:
+                workspaces = session.exec(
+                    select(Category).order_by(Category.sort_order)
+                ).all()
+
+        self.assertEqual(
+            [workspace.name for workspace in workspaces],
+            expected_workspaces,
+        )
+
     def test_passwords_are_hashed_and_sessions_are_account_scoped(self) -> None:
         account = create_account(
             username="casey",
