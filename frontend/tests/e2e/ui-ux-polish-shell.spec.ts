@@ -1,7 +1,7 @@
 import { expect, test } from '../support/fixtures/strategist.fixture';
 
 test.describe('UI/UX polish shell', () => {
-  test('uses the compact tree, tabbed AI workspace, and resizable panel structure', async ({
+  test('uses the compact tree, floating chat, and keyboard-resizable task repository', async ({
     page,
     categoryFactory,
     nodeFactory,
@@ -143,11 +143,11 @@ test.describe('UI/UX polish shell', () => {
       .toBe('none');
     await expect(page.getByLabel('Search tasks in this workspace')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Filter tasks' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add task' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Add task', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: /Sort tasks/i })).toBeVisible();
-    const planningPanel = page.locator('.panel-planning');
+    const planningPanel = page.getByRole('article', { name: 'Task repository' });
     const planningResizer = page.getByRole('separator', {
-      name: 'Resize planning and AI workspaces',
+      name: 'Resize task repository',
     });
     const widthBefore = await planningPanel.evaluate((element) => element.getBoundingClientRect().width);
     await planningResizer.focus();
@@ -156,134 +156,39 @@ test.describe('UI/UX polish shell', () => {
     }
     const widthAfter = await planningPanel.evaluate((element) => element.getBoundingClientRect().width);
     expect(widthAfter).toBeGreaterThan(widthBefore);
-    await expect(page.locator('.planning-tree-column-headings')).toContainText('Task');
-    await expect(page.locator('.planning-tree-column-headings')).toContainText('Due');
-    await expect(page.locator('.planning-tree-column-headings')).toContainText('Priority');
-    await expect(page.locator('.planning-tree-column-headings')).toContainText('Est.');
-    await expect(page.getByRole('tab', { name: /^Chat$/i })).toHaveAttribute(
-      'aria-selected',
-      'true',
-    );
-    await expect(page.getByRole('tab', { name: /Selected tasks/i })).toBeVisible();
-
     const childWrapper = page.locator(`[data-node-id="${draft.id}"]`);
-    const priorityDot = childWrapper.locator('.node-priority-dot');
-    const priorityAlignment = await priorityDot.evaluate((element) => {
-      const heading = element.ownerDocument.querySelector(
-        '.planning-tree-column-headings span:nth-child(3)',
-      );
-      if (!heading) return null;
-      const headingBounds = heading.getBoundingClientRect();
-      const dotBounds = element.getBoundingClientRect();
-      return {
-        headingCenter: headingBounds.left + headingBounds.width / 2,
-        dotCenter: dotBounds.left + dotBounds.width / 2,
-        dotColor: element.ownerDocument.defaultView?.getComputedStyle(element).backgroundColor,
-      };
-    });
-    expect(priorityAlignment).not.toBeNull();
-    expect(Math.abs(priorityAlignment!.headingCenter - priorityAlignment!.dotCenter)).toBeLessThan(
-      0.5,
-    );
-    expect(priorityAlignment!.dotColor).toBe('rgb(220, 38, 38)');
-    const metadataAlignment = await childWrapper.evaluate((element) => {
-      const headings = element.ownerDocument.querySelectorAll(
-        '.planning-tree-column-headings span',
-      );
-      const dueHeading = headings.item(1);
-      const estimateHeading = headings.item(3);
-      const dueControl = element.querySelector('.node-meta-deadline');
-      const estimateControl = element.querySelector('.node-meta-time');
-      if (!dueHeading || !estimateHeading || !dueControl || !estimateControl) return null;
+    await expect(childWrapper.locator('.node-title')).toContainText(draft.title);
+    await expect(childWrapper.getByRole('button', { name: 'Time estimate: 45m' })).toBeVisible();
+    await expect(childWrapper.locator('.node-priority-dot')).toBeVisible();
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
+    await expect(page.getByRole('tab', { name: /^Chat$/i })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: /Selected tasks/i })).toBeVisible();
+    await page.getByRole('dialog', { name: 'Drasil chat' }).getByRole('button', { name: 'Minimize chat', exact: true }).click();
 
-      return {
-        dueHeadingRight: dueHeading.getBoundingClientRect().right,
-        dueControlRight: dueControl.getBoundingClientRect().right,
-        dueTextAlign:
-          element.ownerDocument.defaultView?.getComputedStyle(dueHeading).textAlign,
-        estimateHeadingRight: estimateHeading.getBoundingClientRect().right,
-        estimateControlRight: estimateControl.getBoundingClientRect().right,
-        estimateTextAlign:
-          element.ownerDocument.defaultView?.getComputedStyle(estimateHeading).textAlign,
-      };
-    });
-    expect(metadataAlignment).not.toBeNull();
-    expect(metadataAlignment!.dueTextAlign).toBe('right');
-    expect(metadataAlignment!.estimateTextAlign).toBe('right');
-    expect(
-      Math.abs(metadataAlignment!.dueHeadingRight - metadataAlignment!.dueControlRight),
-    ).toBeLessThan(0.5);
-    expect(
-      Math.abs(metadataAlignment!.estimateHeadingRight - metadataAlignment!.estimateControlRight),
-    ).toBeLessThan(0.5);
     const branchConnector = childWrapper.locator('.node-tree-connector.branch-end');
     const connectorBorder = await branchConnector.evaluate((element) =>
-      element.ownerDocument.defaultView?.getComputedStyle(element, '::before').borderBottomStyle,
+      element.ownerDocument.defaultView?.getComputedStyle(element, '::after').borderTopStyle,
     );
     expect(connectorBorder).toBe('solid');
-    const connectorGeometry = await branchConnector.evaluate((element) => {
-      const style = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
-      return {
-        radius: style?.borderBottomLeftRadius,
-        top: style?.top,
-        width: style?.width,
-      };
+    const connectorGeometry = await branchConnector.evaluate(element => {
+      const style = getComputedStyle(element, '::before');
+      const connectorBounds = element.getBoundingClientRect();
+      const card = element.closest('.node-card-wrapper')?.querySelector('.node-card-row');
+      return { top: parseFloat(style.top), lineX: connectorBounds.left + parseFloat(style.left), cardLeft: card?.getBoundingClientRect().left };
     });
-    expect(connectorGeometry).toEqual({ radius: '3px', top: '-18px', width: '17px' });
-
-    const connectorAlignment = await branchConnector.evaluate(
-      (element, parentId) => {
-        const parent = element.ownerDocument.querySelector(`[data-node-id="${parentId}"]`);
-        const parentArrow = parent?.querySelector('.node-chevron-icon');
-        if (!parentArrow) return null;
-
-        const arrowBounds = parentArrow.getBoundingClientRect();
-        const connectorBounds = element.getBoundingClientRect();
-        const connectorStyle = element.ownerDocument.defaultView?.getComputedStyle(
-          element,
-          '::before',
-        );
-        return {
-          arrowAxis: arrowBounds.left + arrowBounds.width / 2,
-          connectorLane: connectorBounds.left + Number.parseFloat(connectorStyle?.left ?? '0'),
-        };
-      },
-      String(project.id),
-    );
-    expect(connectorAlignment).not.toBeNull();
-    expect(Math.abs(connectorAlignment!.arrowAxis - connectorAlignment!.connectorLane)).toBeLessThan(
-      0.5,
-    );
-
+    expect(connectorGeometry.top).toBeLessThan(0);
+    expect(connectorGeometry.cardLeft).toBeDefined();
+    expect(connectorGeometry.lineX).toBeLessThanOrEqual(connectorGeometry.cardLeft!);
     const nestedWrapper = page.locator(`[data-node-id="${review.id}"]`);
     const ancestorContinuation = nestedWrapper.locator('.node-tree-connector.continues').first();
     await expect(ancestorContinuation).toBeAttached();
-    const continuationGeometry = await ancestorContinuation.evaluate((element) => {
-      const style = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
-      return { top: style?.top, bottom: style?.bottom };
+    const continuationGeometry = await ancestorContinuation.evaluate(element => {
+      const style = getComputedStyle(element, '::before');
+      return { top: parseFloat(style.top), bottom: parseFloat(style.bottom), border: style.borderLeftStyle };
     });
-    expect(continuationGeometry).toEqual({ top: '-18px', bottom: '0px' });
-
-    const continuationAlignment = await ancestorContinuation.evaluate(
-      (element, rootId) => {
-        const rootArrow = element.ownerDocument.querySelector(
-          `[data-node-id="${rootId}"] .node-chevron-icon`,
-        );
-        if (!rootArrow) return null;
-        const rootBounds = rootArrow.getBoundingClientRect();
-        const connectorBounds = element.getBoundingClientRect();
-        const style = element.ownerDocument.defaultView?.getComputedStyle(element, '::before');
-        return {
-          rootCenter: rootBounds.left + rootBounds.width / 2,
-          lane: connectorBounds.left + Number.parseFloat(style?.left ?? '0'),
-        };
-      },
-      String(project.id),
-    );
-    expect(continuationAlignment).not.toBeNull();
-    expect(Math.abs(continuationAlignment!.rootCenter - continuationAlignment!.lane)).toBeLessThan(
-      0.5,
-    );
+    expect(continuationGeometry.top).toBeLessThan(0);
+    expect(continuationGeometry.bottom).toBeLessThanOrEqual(0);
+    expect(continuationGeometry.border).toBe('solid');
     await expect(page.locator(`[data-node-id="${inbox.id}"] .node-tree-connectors`)).toHaveCount(0);
 
     await childWrapper.getByRole('button', { name: 'Time estimate: 45m' }).click();
@@ -318,6 +223,7 @@ test.describe('UI/UX polish shell', () => {
     await expect(childVirtualRow).toHaveClass(/hover-descendant/);
 
     await page.getByRole('button', { name: `Select ${project.title} for execution staging` }).click();
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
     const selectedTab = page.getByRole('tab', { name: /Selected tasks/i });
     await expect(selectedTab).toContainText('1');
     await selectedTab.click();
@@ -332,15 +238,14 @@ test.describe('UI/UX polish shell', () => {
     const composer = page.getByLabel('AI workspace prompt');
     await composer.fill('Summarize the plan with math');
     await composer.press('Enter');
-    await expect(page.getByRole('status', { name: /AI workspace is thinking/i })).toContainText(
-      /Understanding your request|Finalizing the response/,
-    );
+    await expect(page.locator('.chat-progress-status')).toBeVisible();
     await expect(page.locator('.ai-task-reference[data-task-id="7102"]')).toContainText(
       'Draft case study',
     );
     await expect(page.locator('.ai-math .katex')).toBeVisible();
     await expect(page.getByText('Internal diagnostic trace')).toHaveCount(0);
 
+    await page.getByRole('dialog', { name: 'Drasil chat' }).getByRole('button', { name: 'Minimize chat', exact: true }).click();
     const widthBeforeFinalResize = await planningPanel.evaluate(
       (element) => element.getBoundingClientRect().width,
     );

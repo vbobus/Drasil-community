@@ -67,7 +67,7 @@ test('remembered preferences can be disabled, restored, and deleted', async ({
   await page.goto('/');
   await boot;
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Remembered preferences' }).click();
+  await page.getByRole('button', { name: 'Memory', exact: true }).click();
 
   const card = page
     .locator('.settings-memory-item')
@@ -151,7 +151,7 @@ test('memory center creates and edits a typed preference', async ({
   await page.goto('/');
   await boot;
   await page.getByRole('button', { name: 'Settings' }).click();
-  await page.getByRole('button', { name: 'Remembered preferences' }).click();
+  await page.getByRole('button', { name: 'Memory', exact: true }).click();
 
   await page.getByTitle('Add preference').click();
   await page.getByRole('textbox', { name: 'Preference', exact: true }).fill('Use a 17-minute gap between tasks.');

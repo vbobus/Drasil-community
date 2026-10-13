@@ -145,12 +145,17 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
     await boot;
 
     await page
+      .getByRole('button', { name: /select launch case study for execution staging/i }).focus();
+    await page
       .getByRole('button', { name: /select launch case study for execution staging/i })
       .click();
+    await page
+      .getByRole('button', { name: /select write launch email for execution staging/i }).focus();
     await page
       .getByRole('button', { name: /select write launch email for execution staging/i })
       .click();
 
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
     await page.getByRole('tab', { name: /^Selected tasks/i }).click();
     const selectedPanel = page.getByRole('region', { name: /^Selected tasks$/i });
     await selectedPanel.getByRole('button', { name: /auto-schedule selected/i }).click();
@@ -163,6 +168,11 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
     });
 
     const calendar = page.getByRole('region', { name: /shared calendar/i });
+    const clickCalendarControl = async (name: RegExp) => {
+      await page.getByRole('dialog', { name: 'Drasil chat' }).getByRole('button', { name: 'Minimize chat', exact: true }).click();
+      await calendar.getByRole('button', { name }).click();
+      await page.getByRole('button', { name: 'Open chat', exact: true }).click();
+    };
     await expect(
       calendar.getByRole('button', {
         name: /Launch case study.*9:00 AM.*10:15 AM.*Work.*2 subtasks.*draft/i,
@@ -171,7 +181,7 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
     await expect(calendar.getByText('Draft outline')).toBeVisible();
     await expect(calendar.getByText('Review visuals')).toBeVisible();
 
-    await calendar.getByRole('button', { name: /next calendar range/i }).click();
+    await clickCalendarControl(/next calendar range/i);
     await expect(
       calendar.getByRole('button', {
         name: /Launch case study.*9:00 AM.*10:15 AM.*Work.*2 subtasks.*draft/i,
@@ -179,14 +189,14 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
     ).toHaveCount(0);
     await expect(selectedPanel.getByText('1 drafted')).toBeVisible();
 
-    await calendar.getByRole('button', { name: /previous calendar range/i }).click();
+    await clickCalendarControl(/previous calendar range/i);
     await expect(
       calendar.getByRole('button', {
         name: /Launch case study.*9:00 AM.*10:15 AM.*Work.*2 subtasks.*draft/i,
       }),
     ).toBeVisible();
 
-    await calendar.getByRole('button', { name: /^Week$/i }).click();
+    await clickCalendarControl(/^Week$/i);
     await expect(
       calendar.getByRole('button', {
         name: /Launch case study.*9:00 AM.*10:15 AM.*Work.*2 subtasks.*draft/i,
@@ -194,7 +204,7 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
     ).toBeVisible();
     await expect(selectedPanel.getByText('1 drafted')).toBeVisible();
 
-    await calendar.getByRole('button', { name: /^Month$/i }).click();
+    await clickCalendarControl(/^Month$/i);
     const monthDraftCard = calendar.locator('.calendar-grid-block.variant-draft').filter({
       hasText: 'Launch case study',
     });
@@ -206,7 +216,7 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
     await expect(monthDraftCard).toHaveCSS('border-top-style', 'dashed');
     await expect(selectedPanel.getByText('1 drafted')).toBeVisible();
 
-    await calendar.getByRole('button', { name: /^Day$/i }).click();
+    await clickCalendarControl(/^Day$/i);
     await expect(
       calendar.getByRole('button', {
         name: /Launch case study.*9:00 AM.*10:15 AM.*Work.*2 subtasks.*draft/i,
@@ -228,6 +238,7 @@ test.describe('Story 2.3 - Deterministic scheduling solver dry run', () => {
       }),
     ).toHaveCount(1);
 
+    await page.getByRole('dialog', { name: 'Drasil chat' }).getByRole('button', { name: 'Minimize chat', exact: true }).click();
     await calendar
       .getByRole('button', {
         name: /Launch case study.*9:00 AM.*10:15 AM.*Work.*2 subtasks.*draft/i,

@@ -82,15 +82,23 @@ test.describe('Story 2.1 - Selected task cards and estimate rollups', () => {
     await workspaceBoot;
 
     await page
+      .getByRole('button', { name: /select draft implementation outline for execution staging/i }).focus();
+    await page
       .getByRole('button', { name: /select draft implementation outline for execution staging/i })
       .click();
+    await page
+      .getByRole('button', { name: /select launch plan for execution staging/i }).focus();
     await page
       .getByRole('button', { name: /select launch plan for execution staging/i })
       .click();
     await page
+      .getByRole('button', { name: /select design visuals for execution staging/i }).focus();
+    await page
       .getByRole('button', { name: /select design visuals for execution staging/i })
       .click();
     await page.getByRole('button', { name: /^Backlog/i }).click();
+    await page
+      .getByRole('button', { name: /select follow up with vendors for execution staging/i }).focus();
     await page
       .getByRole('button', { name: /select follow up with vendors for execution staging/i })
       .click();

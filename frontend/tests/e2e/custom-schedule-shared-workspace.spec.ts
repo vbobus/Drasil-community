@@ -253,7 +253,9 @@ test.describe('Story 2.5 - custom schedule in the shared AI workspace', () => {
     await page.goto('/');
     await boot;
 
+    await page.getByRole('button', { name: /select outline launch plan for execution staging/i }).focus();
     await page.getByRole('button', { name: /select outline launch plan for execution staging/i }).click();
+    await page.getByRole('button', { name: /select draft launch plan for execution staging/i }).focus();
     await page.getByRole('button', { name: /select draft launch plan for execution staging/i }).click();
     await page.getByRole('tab', { name: /Selected tasks/i }).click();
     const selectedPanel = page.getByRole('region', { name: /^Selected tasks$/i });
@@ -265,6 +267,7 @@ test.describe('Story 2.5 - custom schedule in the shared AI workspace', () => {
     await page.getByRole('button', { name: /Health workspace/i }).click();
     await healthBoot;
     await expect(selectedPanel.getByRole('heading', { name: 'Draft launch plan' })).toBeVisible();
+    await page.getByRole('button', { name: /select plan workout for execution staging/i }).focus();
     await page.getByRole('button', { name: /select plan workout for execution staging/i }).click();
     await expect(page.getByRole('button', { name: 'Custom schedule' })).toHaveCount(0);
     await page.getByRole('tab', { name: /^Chat$/i }).click();
@@ -328,7 +331,9 @@ test.describe('Story 2.5 - custom schedule in the shared AI workspace', () => {
     await page.goto('/');
     await boot;
 
+    await page.getByRole('button', { name: /select draft launch plan for execution staging/i }).focus();
     await page.getByRole('button', { name: /select draft launch plan for execution staging/i }).click();
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
     await page.getByLabel('AI workspace prompt').fill('schedule these tomorrow');
     const delayedResponse = page.waitForResponse((response) =>
       response.request().method() === 'POST'
@@ -361,7 +366,9 @@ test.describe('Story 2.5 - custom schedule in the shared AI workspace', () => {
     await page.goto('/');
     await boot;
 
+    await page.getByRole('button', { name: /select draft launch plan for execution staging/i }).focus();
     await page.getByRole('button', { name: /select draft launch plan for execution staging/i }).click();
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
     await page.getByLabel('AI workspace prompt').fill('schedule these tomorrow');
     const invalidResponse = page.waitForResponse((response) =>
       response.request().method() === 'POST'
@@ -426,6 +433,7 @@ test.describe('Story 2.5 - custom schedule in the shared AI workspace', () => {
     await boot;
 
     await expect(page.getByRole('button', { name: 'Custom schedule' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
     await expect(page.getByRole('textbox', { name: 'AI workspace prompt' })).toBeVisible();
     await expect(page.getByLabel('Attached selected tasks')).toHaveCount(0);
   });

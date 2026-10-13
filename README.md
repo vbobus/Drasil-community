@@ -61,12 +61,13 @@ Use Python 3.14, Node.js 24, and npm 10 or newer.
 
 ```sh
 python -m venv backend/venv
+source backend/venv/bin/activate
 python -m pip install -r backend/requirements.txt
 cp backend/.env.example backend/.env
 npm ci --prefix frontend
 ```
 
-Activate the virtual environment, then run in separate terminals:
+On Windows, activate with `./backend/venv/Scripts/Activate.ps1`. Then run in separate terminals:
 
 ```sh
 cd backend

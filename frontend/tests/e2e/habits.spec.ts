@@ -192,10 +192,7 @@ test('habit page visual states, history interaction, keyboard, and responsive th
   await expect(page.getByText('Schedule changes start today.', { exact: true })).toBeVisible();
 });
 
-test.describe('compact habit touch interactions', () => {
-  test.use({ hasTouch: true });
-
-  test('narrow history scrolls without check-ins, saves stay local, and the editor fits a short viewport', async ({ page }) => {
+async function mockCompactHabits(page: Page) {
     const snapshot: HabitSnapshot = {
       today: '2026-10-09', totalXp: 0, level: 1, levelXp: 0, totalCheckIns: 0, bestStreak: 0,
       badges: [{ id: 'first', title: 'First step', description: 'Complete your first check-in.', earned: false }],
@@ -224,6 +221,16 @@ test.describe('compact habit touch interactions', () => {
       }
       await route.fulfill({ json: snapshot });
     });
+
+  return { getCheckInRequests: () => checkInRequests, releaseSave: () => releaseSave?.() };
+}
+
+test.describe('compact habit touch interactions', () => {
+  test.use({ hasTouch: true });
+
+  test('narrow history supports native vertical and horizontal scrolling without check-ins', async ({ page, browserName }) => {
+    test.skip(browserName !== 'chromium', 'CDP gesture input is Chromium-only.');
+    const demo = await mockCompactHabits(page);
     await page.setViewportSize({ width: 320, height: 720 });
     await page.goto('/');
     await openHabits(page);
@@ -231,7 +238,6 @@ test.describe('compact habit touch interactions', () => {
     const row = page.getByRole('article', { name: 'Read 10 pages', exact: true });
     await expect(row).toBeVisible();
     await expect(rows).toHaveCount(3);
-    const originalOrder = await rows.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')));
     await expect(page.locator('.habit-milestones')).toHaveJSProperty('open', false);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     expect(await page.locator('.habits-page').evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
@@ -273,25 +279,30 @@ test.describe('compact habit touch interactions', () => {
     await swipe(trail.x + trail.width / 2, trail.y + 28, 0, -90);
     await expect.poll(() => page.locator('.habits-page').evaluate(element => element.scrollTop)).toBeGreaterThan(beforeScroll);
     await waitForScrollSettled();
-    expect(checkInRequests).toBe(0);
+    expect(demo.getCheckInRequests()).toBe(0);
     await history.scrollIntoViewIfNeeded();
     trail = (await history.boundingBox())!;
     await swipe(trail.x + trail.width - 30, trail.y + 28, -90, 0);
     await expect.poll(() => history.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
     await waitForScrollSettled();
-    expect(checkInRequests).toBe(0);
+    expect(demo.getCheckInRequests()).toBe(0);
 
-    // Chromium CDP can suppress compatibility clicks after synthetic scrolling.
-    // Validate saving in a fresh document, independently of the no-write swipe checks.
     await touch.detach();
-    await page.reload();
+  });
+
+  test('compact saves stay local and the editor fits a short viewport', async ({ page }) => {
+    const demo = await mockCompactHabits(page);
+    await page.setViewportSize({ width: 320, height: 720 });
+    await page.goto('/');
     await openHabits(page);
+    const rows = page.locator('.habit-row');
+    const row = page.getByRole('article', { name: 'Read 10 pages', exact: true });
     await expect(row).toBeVisible();
     await expect(rows).toHaveCount(3);
+    const originalOrder = await rows.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')));
     try {
       const checkIn = row.getByRole('button', { name: 'Check in Read 10 pages', exact: true });
       await checkIn.scrollIntoViewIfNeeded();
-      await waitForScrollSettled();
       const saveRequest = page.waitForRequest(request => request.method() === 'PUT'
         && request.url().includes('/api/v1/habits/touch-0/check-ins/2026-10-09'), { timeout: 10_000 });
       await checkIn.tap();
@@ -300,7 +311,7 @@ test.describe('compact habit touch interactions', () => {
       await expect(saving).toHaveAttribute('aria-busy', 'true');
       await expect(saving).toHaveText('Saving…');
       expect(await rows.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(originalOrder);
-    } finally { releaseSave?.(); }
+    } finally { demo.releaseSave(); }
     await expect(row.getByRole('button', { name: 'Undo Read 10 pages today', exact: true })).toBeVisible();
     expect(await rows.evaluateAll(elements => elements.map(element => element.getAttribute('aria-label')))).toEqual(originalOrder);
     await row.getByRole('button', { name: 'Undo Read 10 pages today', exact: true }).tap();

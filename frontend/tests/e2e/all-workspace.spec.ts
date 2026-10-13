@@ -7,6 +7,7 @@ test.describe('All workspace', () => {
     nodeFactory,
     mockWorkspace,
     mockStrategistApi,
+    openStrategist,
   }) => {
     const work = categoryFactory.build({
       id: 801,
@@ -135,7 +136,8 @@ test.describe('All workspace', () => {
     await expect(page.getByRole('separator', { name: 'Work workspace' })).toBeVisible();
     await expect(page.getByRole('separator', { name: 'Health workspace' })).toBeVisible();
     await expect(page.locator('.node-workspace-pill')).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Add task' })).toBeDisabled();
+    await expect(page.locator('.planning-tree-surface').getByRole('button', { name: 'Add task', exact: true })).toBeDisabled();
+    await openStrategist();
     await expect(page.getByLabel('AI workspace prompt')).toBeVisible();
 
     await page

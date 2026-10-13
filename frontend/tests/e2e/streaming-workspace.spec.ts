@@ -77,9 +77,9 @@ test('laptop keeps planning and calendar visible and loads floating chat on dema
     bounds.push((await panel.boundingBox())!);
   }
   expect(bounds[1].x + bounds[1].width).toBeLessThanOrEqual(1100);
-  await expect(page.getByRole('region', { name: 'Drasil chat', exact: true })).toBeHidden();
+  await expect(page.getByRole('dialog', { name: 'Drasil chat', exact: true })).toBeHidden();
   await page.getByRole('button', { name: 'Open chat', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Drasil chat', exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Drasil chat', exact: true })).toBeVisible();
   await expect(page.getByPlaceholder('Ask Drasil to plan, review, or schedule…')).toBeVisible();
   await page.getByRole('button', { name: 'Minimize chat', exact: true }).first().click();
   await expect(page.getByPlaceholder('Ask Drasil to plan, review, or schedule…')).toHaveCount(1);

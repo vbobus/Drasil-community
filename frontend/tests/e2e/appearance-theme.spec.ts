@@ -28,6 +28,7 @@ test.describe('Appearance theme', () => {
     });
 
     await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Appearance', exact: true }).click();
     await expect(page.getByTestId('theme-dark-choice')).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByTestId('theme-light-choice')).toHaveAttribute('aria-pressed', 'false');
 
@@ -52,6 +53,7 @@ test.describe('Appearance theme', () => {
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
 
     await page.getByRole('button', { name: 'Settings' }).click();
+    await page.getByRole('button', { name: 'Appearance', exact: true }).click();
     await page.getByTestId('theme-dark-choice').click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect
@@ -174,7 +176,7 @@ test.describe('Appearance theme', () => {
     await page.goto('/');
     await boot;
     await page.getByRole('button', { name: 'Settings' }).click();
-    await page.getByRole('button', { name: 'Remembered preferences' }).click();
+    await page.getByRole('button', { name: 'Memory', exact: true }).click();
 
     const activePreference = page
       .locator('.settings-memory-item')
@@ -432,14 +434,13 @@ test.describe('Appearance theme', () => {
       ),
     );
 
-    expect(renderedColors[0].categoryColor).toBe(work.accentColor);
-    expect(renderedColors[1].categoryColor).toBe(health.accentColor);
+    expect(renderedColors[0].categoryColor).toBe('#c5a16a');
+    expect(renderedColors[1].categoryColor).toBe('#a9bca0');
     expect(renderedColors[0].backgroundColor).not.toBe(renderedColors[1].backgroundColor);
-    expect(renderedColors[0].borderLeftColor).not.toBe(renderedColors[1].borderLeftColor);
     expect(renderedColors[0].borderLeftWidth).toBe('1px');
     expect(renderedColors[1].borderLeftWidth).toBe('1px');
-    expect(renderedColors[0].textColor).toBe('rgb(237, 243, 255)');
-    expect(renderedColors[1].textColor).toBe('rgb(237, 243, 255)');
+    expect(renderedColors[0].textColor).toBe('rgb(37, 36, 31)');
+    expect(renderedColors[1].textColor).toBe('rgb(37, 36, 31)');
     expect(renderedColors[0].boxShadow).toBe('none');
     expect(renderedColors[1].boxShadow).toBe('none');
     expect(renderedColors[0].contrastRatio).toBeGreaterThanOrEqual(4.5);

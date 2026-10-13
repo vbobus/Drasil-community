@@ -41,7 +41,7 @@ test('loads a workspace tree from deterministic route stubs', async ({
   // Then the workspace chrome and seeded task tree render from the mock graph.
   await expect(page.getByTestId('app-shell')).toBeVisible();
   await expect(page.getByLabel('Search tasks in this workspace')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Add task' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Add task', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /resume polish workspace \(active\)/i })).toBeVisible();
   await expect(page.getByRole('treeitem', { name: new RegExp(rootTask.title) })).toBeVisible();
   await expect(page.getByRole('treeitem', { name: new RegExp(childTask.title) })).toBeVisible();
