@@ -57,7 +57,7 @@ Tasks, calendars, and habits work without an AI connection. A source install can
 
 ## Develop locally
 
-Use Python 3.14 and Node.js 24.
+Use Python 3.14, Node.js 24, and npm 10 or newer.
 
 ```sh
 python -m venv backend/venv

@@ -49,7 +49,7 @@ test-results/
 .codex/
 .vercel/
 .impeccable/
-public/
+/public/
 **/auth.json
 **/credentials.json
 .eval-artifacts/

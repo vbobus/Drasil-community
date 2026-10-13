@@ -17,7 +17,7 @@ The recording fixture defines a field-guide project, personal tasks, sketch prac
 
 ## Record again
 
-Install Node.js 24, the frontend dependencies, Chromium for Playwright, and FFmpeg on your PATH:
+Install Node.js 24 with npm 10 or newer, the frontend dependencies, Chromium for Playwright, and FFmpeg on your PATH:
 
 ```sh
 npm ci --prefix frontend
