@@ -1,0 +1,51 @@
+/* Compact screens have one working surface and a labelled navigation drawer. */
+@media (max-width: 1023px) {
+  .app-root .app-main { padding: 0; }
+  .app-main > :is(.habits-page, .my-day-agenda) { margin-bottom: calc(64px + env(safe-area-inset-bottom)); min-height: 0; }
+  .app-root .app-shell-floating { --tree-panel-width: 100cqw; margin-bottom: calc(64px + env(safe-area-inset-bottom)); }
+  .responsive-workspace-nav { margin: 6px 8px; box-shadow: none; }
+  .app-root .planning-panel-header { flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
+  .app-root .planning-view-switch { margin-left: auto; }
+  .app-root .planning-view-switch button, .app-root .planning-panel-more-btn,
+  .app-root .floating-repository-header button, .app-root .planning-tree-icon-btn,
+  .app-root .planning-tree-add-btn { min-height: 44px; min-width: 44px; }
+  .app-root .planning-tree-search-shell input { min-height: 44px; font-size: 16px; }
+  .app-root .week-navigation { flex-basis: 100%; }
+  .app-root .week-navigation button { min-height: 44px; min-width: 44px; }
+  .app-root .week-completed-toggle { min-height: 44px; font-size: .8125rem; }
+  .app-root .week-board-scroll { scroll-snap-type: x proximity; padding-bottom: 20px; }
+  .app-root .week-day-column { scroll-snap-align: center; flex-basis: min(88%, 440px); }
+  .app-root .week-task-title { font-size: 1rem; min-height: 44px; align-items: center; }
+  .app-root .week-task-check, .app-root .week-subtask-check { min-width: 44px; min-height: 44px; padding: 0; align-items: center; justify-content: center; }
+  .app-root .week-subtask > button { min-height: 44px; justify-content: center; font-size: .875rem; }
+  .app-root .week-add-task { min-height: 44px; font-size: .875rem; }
+  .app-root .week-task-menu-trigger { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; flex-shrink: 0; color: var(--color-text-secondary); border-radius: 8px; }
+  html .week-task-menu button, html .week-delete-actions button { min-height: 44px; }
+  .app-root .calendar-agenda.is-week-mode { grid-template-columns: 46px minmax(1120px, 1fr); }
+  .app-root .calendar-date-axis.is-week-axis, .app-root .calendar-week-time-grid { grid-template-columns: repeat(7, minmax(160px, 1fr)); }
+  .app-root .calendar-week-time-grid { border: 0; }
+  .app-root .calendar-agenda.is-summary-mode:has(.calendar-month-grid) { grid-template-columns: minmax(315px, 1fr); }
+  .app-root .calendar-month-weekdays, .app-root .calendar-month-grid { grid-template-columns: repeat(7, minmax(45px, 1fr)); }
+  .app-root .calendar-month-grid { border: 0; }
+  .app-root .calendar-month-cell { padding: 0 0 4px; }
+  .app-root .calendar-month-cell .calendar-date-select { width: 100%; min-height: 44px; }
+  .app-root .calendar-date-select, .app-root .calendar-view-btn, .app-root .calendar-nav-btn, .app-root .calendar-today-btn { min-height: 44px; }
+  .task-page-dialog { inset: var(--visual-viewport-top, 0px) auto auto var(--visual-viewport-left, 0px); width: var(--visual-viewport-width, 100vw); height: var(--visual-viewport-height, 100dvh); margin: 0; border-radius: 0; }
+  .task-page-dialog .planning-surface-header { padding-top: max(16px, env(safe-area-inset-top)); }
+  .task-page-dialog .planning-detail-scroll { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  .task-page-dialog input, .task-page-dialog select, .task-page-dialog textarea { font-size: 16px; }
+  .task-page-dialog .planning-detail-close-btn { min-height: 44px; min-width: 44px; }
+}
+@media (max-width: 1023px) and (max-height: 500px) {
+  .app-root .week-planning { display: block; overflow-y: auto; overscroll-behavior: contain; }
+  .app-root .week-board-scroll { min-height: 440px; height: auto; flex: none; }
+  .app-root .week-day-heading { position: static; }
+  .app-root .app-shell-floating .calendar-shell { display: block; overflow-y: auto; overscroll-behavior: contain; }
+  .app-root .calendar-agenda { min-height: 440px; height: 440px; flex: none; }
+}
+@media (pointer: coarse) {
+  .app-root .week-task-menu-trigger { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; color: var(--color-text-secondary); }
+  .week-task-card:active { background: var(--color-bg-elevated); }
+  .week-task-check input, .week-subtask-check input { width: 20px; height: 20px; }
+  .week-task-check input:checked::after, .week-subtask-check input:checked::after { top: 3px; left: 6px; width: 5px; height: 9px; }
+}

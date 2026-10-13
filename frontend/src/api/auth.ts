@@ -24,6 +24,8 @@ export interface ChatGptAuthStatus {
 }
 
 export interface StrategistProviderSettings {
+  supportsChatGptLogin?: boolean;
+  chatGptHosting?: 'sandbox' | 'local';
   activeProvider: 'codex-cli' | 'openai-api';
   activeProviderLabel: string;
   codexModel?: string | null;

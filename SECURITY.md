@@ -42,3 +42,13 @@ account remotely, then remove it after setup.
 
 Back up the account registry and all account directories as one unit. Do not
 publish either one, even if the other is absent.
+
+## Windows desktop shell
+
+The Electron shell accepts remote content only from the HTTPS origin selected
+by the user (or loopback HTTP for local development). The renderer has no Node
+integration or preload bridge, uses context isolation and Chromium sandboxing,
+keeps web security enabled, denies permission requests, and blocks navigation
+away from the selected origin. Keep Electron current because the installer also
+ships a Chromium runtime. Publicly distributed installers should be
+Authenticode-signed; the local development installer is intentionally unsigned.

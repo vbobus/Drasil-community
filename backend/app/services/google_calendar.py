@@ -89,6 +89,10 @@ def _get_settings_path() -> Path:
 
 
 def _load_raw_settings() -> dict[str, str]:
+    from app.db.hosted import hosted_storage
+    if hosted_storage():
+        from app.services.private_settings import load_settings
+        return load_settings("google")
     settings_path = _get_settings_path()
     if not settings_path.exists():
         return {}
@@ -176,6 +180,11 @@ def _read_google_oauth_config() -> dict[str, str | None]:
     }
 
 
+def configured_calendar_time_zone() -> str:
+    """The account's wall-time zone for persisted offset-free calendar blocks."""
+    return str(_read_google_oauth_config()["time_zone"] or "UTC")
+
+
 def _read_frontend_origin() -> str:
     load_local_env()
     return (
@@ -198,15 +207,14 @@ def render_google_oauth_popup_result(
         "status": status_payload if ok else None,
         "error": error if not ok else None,
     }
-    payload_json = json.dumps(payload).replace("</", "<\\/")
-    target_origin_json = json.dumps(target_origin)
+    popup_data = {"payload": payload, "targetOrigin": target_origin, "ok": ok}
+    popup_json = json.dumps(popup_data).replace("<", "\\u003c")
     title = "Google Calendar connected" if ok else "Google Calendar connection failed"
     message = (
         "You can close this window and return to Drasil."
         if ok
         else (error or "Drasil could not finish the Google Calendar connection.")
     )
-    auto_close = "window.setTimeout(function () { window.close(); }, 900);" if ok else ""
     return f"""<!doctype html>
 <html lang="en">
   <head>
@@ -257,18 +265,10 @@ def render_google_oauth_popup_result(
     <main>
       <h1>{escape(title)}</h1>
       <p>{escape(message)}</p>
-      <button type="button" onclick="window.close()">Close</button>
+      <button type="button" id="close-popup">Close</button>
     </main>
-    <script>
-      (function () {{
-        var payload = {payload_json};
-        var targetOrigin = {target_origin_json};
-        if (window.opener && !window.opener.closed) {{
-          window.opener.postMessage(payload, targetOrigin);
-        }}
-        {auto_close}
-      }}());
-    </script>
+    <script type="application/json" id="oauth-result">{popup_json}</script>
+    <script src="{escape(target_origin, quote=True)}/oauth-popup.js"></script>
   </body>
 </html>"""
 

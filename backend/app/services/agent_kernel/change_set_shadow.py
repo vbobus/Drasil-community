@@ -417,6 +417,7 @@ def _metadata_comparison_dimensions(
     }
 def _normalize_task_updates(value: dict[str, Any]) -> dict[str, Any]:
     aliases = {
+        "planned_date": "plannedDate",
         "deadline_at": "deadlineAt",
         "deadline": "deadlineAt",
         "due_date": "deadlineAt",
@@ -1111,7 +1112,7 @@ def _legacy_mixed_created_task_semantics(
         for key, raw in operation.items()
         if key in {
             "notes", "priority", "status", "estimate_minutes",
-            "time_estimate_minutes", "deadline_at", "deadline",
+            "time_estimate_minutes", "planned_date", "deadline_at", "deadline",
         }
     }
     normalized_fields = _normalize_task_updates(fields)
@@ -1522,7 +1523,7 @@ def _legacy_task_branch_semantics(operation: dict[str, Any]) -> dict[str, Any] |
             for key, raw in operation.items()
             if key in {
                 "notes", "priority", "status", "estimate_minutes",
-                "time_estimate_minutes", "deadline_at", "deadline",
+                "time_estimate_minutes", "planned_date", "deadline_at", "deadline",
             }
         }
         return {

@@ -6,9 +6,9 @@
   border: 1px solid color-mix(in srgb, var(--color-cat-growth) 24%, white 76%);
   border-radius: 14px;
   background: color-mix(in srgb, var(--color-cat-growth-tint) 14%, white 86%);
-  color: #334f76;
-  font-size: 0.76rem;
-  line-height: 1.4;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  line-height: 1.6;
   overflow-wrap: anywhere;
 }
 
@@ -32,18 +32,18 @@
 }
 
 .review-document-card h4 {
-  color: #153056;
+  color: var(--color-text-primary);
   font-size: 0.82rem;
 }
 
 .review-document-card h5 {
-  color: #27476f;
-  font-size: 0.76rem;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
 }
 
 .review-document-card h6 {
-  color: #27476f;
-  font-size: 0.74rem;
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
 }
 
 .review-document-card p,
@@ -54,8 +54,8 @@
 }
 
 .review-document-eyebrow {
-  color: #7287a8;
-  font-size: 0.64rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
   font-weight: 750;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -97,8 +97,8 @@
 .review-document-entities small,
 .review-document-summary-grid small,
 .review-document-sync small {
-  color: #7185a3;
-  font-size: 0.68rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
 }
 
 .review-document-task-structure,
@@ -111,13 +111,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #27476f;
+  color: var(--color-text-primary);
 }
 
 .review-document-workspace-label small {
   margin-left: auto;
-  color: #7185a3;
-  font-size: 0.66rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
 }
 
 .review-document-task-tree,
@@ -154,7 +154,7 @@
 
 .review-document-tree-title {
   min-width: 0;
-  color: #294b75;
+  color: var(--color-text-primary);
   font-weight: 650;
 }
 
@@ -168,8 +168,8 @@
 
 .review-document-tree-meta small,
 .review-document-tree-schedule small {
-  color: #7185a3;
-  font-size: 0.65rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
 }
 
 .review-document-tree-meta small {
@@ -183,8 +183,8 @@
   align-items: center;
   gap: 5px;
   margin-left: 7px;
-  color: #476b98;
-  font-size: 0.68rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
 }
 
 .review-document-tree-schedule small {
@@ -204,12 +204,12 @@
   display: grid;
   grid-template-columns: 54px minmax(0, 1fr);
   gap: 7px;
-  font-size: 0.72rem;
+  font-size: 0.75rem;
 }
 
 .review-document-diff > span:first-child {
-  color: #7b8fac;
-  font-size: 0.64rem;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -228,13 +228,13 @@
 
 .review-document-warning {
   padding-left: 9px;
-  border-left: 3px solid #d0a94d;
+  border-left: 1px solid var(--color-state-warning);
 }
 
 .review-document-warning.is-critical,
 .review-document-status.is-warning {
   border-color: color-mix(in srgb, #b9795f 40%, white 60%);
-  color: #755346;
+  color: var(--color-text-primary);
 }
 
 .review-document-actions {
@@ -249,8 +249,8 @@
 }
 
 .review-document-edit-form label {
-  color: #27476f;
-  font-size: 0.72rem;
+  color: var(--color-text-primary);
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
@@ -267,7 +267,7 @@
 }
 
 .review-document-edit-form textarea:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-accent-primary) 36%, white 64%);
+  outline: 2px solid var(--color-cat-work);
   outline-offset: 2px;
 }
 
@@ -276,26 +276,26 @@
   min-height: 40px;
   padding: 0 12px;
   border-radius: 9px;
-  font-size: 0.76rem;
+  font-size: 0.8125rem;
   font-weight: 700;
 }
 
 .review-document-primary-action {
   border: 1px solid transparent;
-  background: linear-gradient(135deg, #245ae8 0%, #2a67ff 100%);
+  background: #4f46e5;
   color: white;
 }
 
 .review-document-secondary-action {
   border: 1px solid color-mix(in srgb, var(--color-border-subtle) 72%, white 28%);
   background: rgba(255, 255, 255, 0.86);
-  color: #36577f;
+  color: var(--color-text-primary);
 }
 
 .review-document-primary-action:focus-visible,
 .review-document-secondary-action:focus-visible,
 .review-document-card summary:focus-visible {
-  outline: 3px solid color-mix(in srgb, var(--color-accent-primary) 36%, white 64%);
+  outline: 2px solid var(--color-cat-work);
   outline-offset: 2px;
 }
 

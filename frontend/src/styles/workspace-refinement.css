@@ -1,0 +1,134 @@
+/* Shared workspace rhythm and task cards. */
+.app-root .app-main { padding: 12px 16px 16px 8px; }
+.app-root .app-shell { gap: 0; padding: 0; grid-template-columns: minmax(300px, 380px) 10px minmax(0, 1fr); }
+.app-root .workspace-panel-calendar { padding: 0; }
+.app-root .calendar-detail-control { align-self: flex-start; margin-left: 12px; margin-right: auto; }
+.planning-tree-surface .planning-tree-column-headings { display: none; }
+.planning-tree-surface .planning-tree-scroll { padding: 6px 10px 10px; }
+/* Two calm rows: identity first, aligned editable details beneath. */
+.planning-tree-surface .planning-tree-virtual-row.row-node { padding-bottom: 6px; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-card { justify-content: stretch; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-card-row { height: 100%; grid-template-columns: minmax(0, 1fr); grid-template-rows: 22px 20px; gap: 4px; padding: 8px; border: 1px solid var(--color-border-subtle); border-radius: 6px; background: var(--color-bg-elevated); box-shadow: none; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-card-row:hover { border-color: var(--color-border-strong); background: var(--color-bg-overlay); }
+.planning-tree-surface .node-card-wrapper.flat-row .node-card.dragging:not(.execution-selected) > .node-card-row { border-color: var(--color-border-strong); background: var(--color-bg-overlay); box-shadow: none; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-title { font-size: 0.8125rem; line-height: 1.4; font-weight: 600; white-space: nowrap; display: block; overflow: hidden; text-overflow: ellipsis; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-title-wrap { min-width: 0; margin: 0; padding: 0; background: transparent; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-title-cluster { min-width: 0; }
+/* Branches live in the indentation gutter, never over a parent's card. */
+.planning-tree-surface .node-tree-connector { color: var(--color-border-strong); }
+.planning-tree-surface .node-tree-connector.continues::before { inset: -6px auto -6px 10px; }
+.planning-tree-surface .node-tree-connector.branch-end::before { top: -6px; bottom: calc(100% - 20px); left: 10px; width: 0; height: auto; border-bottom: 0; border-radius: 0; }
+.planning-tree-surface .node-tree-connector.branch-end.has-next-sibling::before { bottom: -6px; }
+.planning-tree-surface .node-tree-connector.branch-end::after { content: ''; position: absolute; left: 10px; right: 0; top: 20px; border-top: 1px solid currentColor; }
+.app-root button, .app-root input, .app-root select, .app-root textarea, .task-page-dialog button { font-family: inherit; }
+.app-root .planning-panel-header { flex-direction: row; align-items: center; min-height: 52px; padding: 12px; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-row-meta { display: grid; grid-template-columns: 42px 18px 38px minmax(20px, 1fr); align-items: center; gap: 8px; margin: 0 0 0 20px; min-width: 0; font-size: 0.6875rem; color: var(--color-text-secondary); }
+.planning-tree-surface .node-card-wrapper.flat-row .node-row-meta > .priority-control { transform: none; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-row-meta > .node-meta-control { display: flex; min-width: 0; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-row-meta > .stage-control { justify-content: flex-end; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-row-main { grid-template-columns: 12px 18px minmax(0, 1fr); gap: 5px; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-meta-deadline,
+.planning-tree-surface .node-card-wrapper.flat-row .node-meta-time { min-height: 20px; font-size: inherit; font-variant-numeric: tabular-nums; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-title-wrap { flex: 1; }
+.planning-tree-surface .node-card-wrapper.flat-row .node-title-cluster { display: flex; }
+.planning-tree-surface .node-emoji-badge { width: 18px; height: 18px; font-size: 11px; }
+.planning-tree-surface .node-stage-trigger { width: 20px; height: 20px; }
+.planning-tree-surface .node-add-child-btn,
+.planning-tree-surface .node-stage-trigger { opacity: 0; pointer-events: none; transition: opacity 120ms ease-out; }
+.planning-tree-surface .node-card:hover .node-add-child-btn,
+.planning-tree-surface .node-card:hover .node-stage-trigger,
+.planning-tree-surface .node-card:focus-within .node-add-child-btn,
+.planning-tree-surface .node-card:focus-within .node-stage-trigger { opacity: 1; pointer-events: auto; }
+@media (hover: none), (pointer: coarse) {
+  .planning-tree-surface .node-add-child-btn,
+  .planning-tree-surface .node-stage-trigger { opacity: 1; pointer-events: auto; }
+}
+
+.planning-tree-surface .node-card-wrapper.flat-row .node-row-meta button { color: var(--color-text-secondary); }
+.planning-tree-surface .node-card-wrapper.flat-row .node-card.drop-inside .node-card-row { border-color: var(--cat-color); background: color-mix(in srgb, var(--cat-color) 16%, var(--color-bg-elevated)); }
+.planning-tree-surface .node-card.drop-inside::after { content: 'Add as subtask'; position: absolute; right: 8px; top: -8px; padding: 3px 8px; border-radius: 4px; background: var(--color-bg-overlay); color: var(--color-text-primary); font-size: 0.75rem; pointer-events: none; }
+.planning-tree-surface .node-card.drop-before { border-top: 2px solid var(--cat-color); }
+.planning-tree-surface .node-card.drop-after { border-bottom: 2px solid var(--cat-color); }
+.tree-root-drop { position: sticky; bottom: 0; z-index: 15; margin-top: -44px; min-height: 44px; display: grid; place-items: center; border: 1px dashed var(--color-border-strong); border-radius: 8px; background: var(--color-bg-surface); color: var(--color-text-secondary); font-size: 0.8125rem; }
+.tree-root-drop.is-active { background: var(--color-bg-overlay); border-color: var(--color-cat-work); color: var(--color-text-primary); }
+.task-page-dialog { width: min(1080px, calc(100vw - 64px)); height: calc(100dvh - 64px); max-width: none; max-height: none; margin: auto; padding: 0; border: 0; border-radius: 16px; background: var(--color-bg-surface); color: var(--color-text-primary); overflow: hidden; }
+.task-page-dialog::backdrop { background: rgb(0 0 0 / 50%); }
+.task-page-dialog .planning-detail-modal { width: 100%; height: 100%; max-height: none; margin: 0; border: 0; border-radius: 0; box-shadow: none; display: flex; flex-direction: column; }
+.task-page-dialog .planning-surface-header { padding: 28px 32px 20px; align-items: center; border-bottom: 1px solid var(--color-border-subtle); }
+.task-page-dialog .planning-surface-header > div { flex: 1; min-width: 0; }
+.task-page-dialog .planning-detail-title-input { width: 100%; max-height: 200px; resize: none; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; line-height: 1.4; font-size: 1.75rem; font-weight: 650; }
+.task-page-dialog .planning-detail-scroll { flex: 1; padding: 24px 32px 40px; display: grid; grid-template-columns: minmax(0, 1fr) 320px; grid-auto-rows: min-content; column-gap: 32px; row-gap: 16px; align-content: start; }
+.task-page-dialog .planning-detail-scroll > * { grid-column: 1; }
+.task-page-dialog .planning-detail-grid { display: contents; }
+.task-page-dialog .planning-detail-brief { grid-column: 1; }
+.task-page-dialog .planning-detail-brief:not(:has(.planning-checklist)) { display: none; }
+.task-page-dialog .planning-detail-facts { grid-column: 2; grid-row: 1 / span 6; align-self: start; }
+.task-page-dialog .planning-detail-notes { min-height: 160px; }
+.task-page-dialog .planning-detail-facts dd, .task-page-dialog .planning-detail-inline-btn { color: var(--color-text-primary); }
+.task-page-dialog .planning-detail-facts dt, .task-page-dialog .planning-detail-breadcrumb { color: var(--color-text-secondary); }
+.task-page-dialog .planning-detail-facts { background: var(--color-bg-elevated); }
+.task-page-dialog .planning-detail-close-btn { width: 40px; height: 40px; display: grid; place-items: center; }
+.task-page-dialog :focus-visible { outline: 2px solid var(--color-cat-work); outline-offset: 3px; }
+.day-task-holder .day-task-holder-heading { min-height: 26px; }
+.day-task-holder:has(.day-task-holder-list:empty) .day-task-holder-body { min-height: 32px; }
+.review-document-card .review-document-actions { gap: 8px; border-top: 1px solid var(--color-border-subtle); padding-top: 14px; }
+.review-document-card .review-document-blocks { gap: 16px; }
+.floating-chat .review-document-card .review-document-block { border: 0; padding: 0; background: transparent; border-radius: 0; }
+.floating-chat .review-document-card { padding: 16px; }
+.floating-chat .review-document-card h4 { font-size: 0.875rem; line-height: 1.5; }
+.review-supporting-details { color: var(--color-text-secondary); font-size: 0.8125rem; }
+.review-supporting-details summary { cursor: pointer; padding: 6px 0; }
+.review-supporting-details[open] summary { margin-bottom: 8px; }
+@media (max-width: 1023px) {
+  .app-root .app-shell { grid-template-columns: minmax(0, 1fr); }
+  .app-root .app-main { padding: 8px; }
+}
+@media (max-width: 680px) {
+  .task-page-dialog { width: 100%; height: 100dvh; border-radius: 0; }
+  .task-page-dialog .planning-surface-header { padding: 20px; }
+  .task-page-dialog .planning-detail-title-input { font-size: 1.25rem; }
+  .task-page-dialog .planning-detail-scroll { padding: 20px; }
+}
+@media (max-width: 800px) {
+  .task-page-dialog .planning-detail-scroll { display: flex; flex-direction: column; gap: 16px; }
+  .task-page-dialog .planning-detail-facts { width: 100%; }
+}
+
+/* Shared completion geometry: a filled green circle and a centered, solid check. */
+html[data-theme] body input.node-checkbox,
+html[data-theme] body input.calendar-block-check,
+html[data-theme] body .calendar-thread-row input[type='checkbox'] {
+  appearance: none; position: relative; flex-shrink: 0; margin: 0;
+  border-radius: 50%; border: 1.5px solid var(--color-border-strong);
+  background: transparent; box-shadow: none; cursor: pointer;
+  transition: background-color 160ms ease-out, border-color 160ms ease-out;
+}
+html[data-theme] body input.node-checkbox { width: 22px; height: 22px; }
+html[data-theme] body .planning-tree-surface input.node-checkbox { width: 18px; height: 18px; }
+html[data-theme] body input.node-checkbox:checked,
+html[data-theme] body input.calendar-block-check:checked,
+html[data-theme] body .calendar-thread-row input[type='checkbox']:checked { background: #23865a; border-color: #23865a; }
+html[data-theme] body input.node-checkbox:checked::after,
+html[data-theme] body input.calendar-block-check:checked::after,
+html[data-theme] body .calendar-thread-row input[type='checkbox']:checked::after {
+  content: ''; position: absolute; inset: 20%; width: auto; height: auto;
+  border: 0; border-radius: 0; transform: none; background: white;
+  clip-path: polygon(8% 43%, 37% 70%, 89% 15%, 100% 28%, 38% 94%, 0 57%);
+  animation: task-check-reveal 180ms ease-out both;
+}
+html[data-theme] body input.node-checkbox:checked::before,
+html[data-theme] body input.calendar-block-check:checked::before,
+html[data-theme] body .calendar-thread-row input[type='checkbox']:checked::before {
+  content: ''; position: absolute; inset: -5px; border: 1px solid #23865a; border-radius: 50%;
+  animation: task-completion-ring 360ms ease-out both; pointer-events: none;
+}
+html[data-theme] body input.node-checkbox:focus-visible,
+html[data-theme] body input.calendar-block-check:focus-visible,
+html[data-theme] body .calendar-thread-row input[type='checkbox']:focus-visible { outline: 2px solid #23865a; outline-offset: 4px; }
+@keyframes task-check-reveal { from { clip-path: inset(0 100% 0 0); } }
+@keyframes task-completion-ring { from { transform: scale(.65); opacity: .8; } to { transform: scale(1.25); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme] body input.node-checkbox, html[data-theme] body input.calendar-block-check, html[data-theme] body .calendar-thread-row input[type='checkbox'] { transition: none; }
+  html[data-theme] body input.node-checkbox:checked::after, html[data-theme] body input.calendar-block-check:checked::after, html[data-theme] body .calendar-thread-row input[type='checkbox']:checked::after { animation: none; }
+  html[data-theme] body input.node-checkbox:checked::before, html[data-theme] body input.calendar-block-check:checked::before, html[data-theme] body .calendar-thread-row input[type='checkbox']:checked::before { animation: none; opacity: 0; }
+}

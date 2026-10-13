@@ -3009,6 +3009,7 @@ class CompatibilityProposalAdapter:
                 "time_estimate_minutes",
                 fields.get("estimate_minutes"),
             ),
+            planned_date=fields.get("planned_date"),
             deadline_at=fields.get("deadline_at"),
             is_backlog=fields.get("is_backlog"),
             tags=fields.get("tags"),

@@ -41,6 +41,7 @@ interface NodeCardProps {
   workspaceLabel?: string;
   depth?: number;
   continuationDepths?: number[];
+  hasNextSibling?: boolean;
   childVisibility?: 'active' | 'backlog' | 'archived';
   onStatusChange?: (id: string, done: boolean) => void;
   onTitleChange?: (id: string, title: string) => void;
@@ -214,6 +215,7 @@ export const NodeCard = memo(function NodeCard({
   workspaceLabel,
   depth = 0,
   continuationDepths = [],
+  hasNextSibling = false,
   childVisibility = 'active',
   onStatusChange,
   onTitleChange,
@@ -955,6 +957,7 @@ export const NodeCard = memo(function NodeCard({
 
   const handleTitleClick = (event: ReactMouseEvent<HTMLSpanElement>) => {
     event.stopPropagation();
+    cardRef.current?.focus();
     if (titleClickTimerRef.current !== null) {
       window.clearTimeout(titleClickTimerRef.current);
     }
@@ -1083,7 +1086,7 @@ export const NodeCard = memo(function NodeCard({
               key={level}
               className={
                 level === depth - 1
-                  ? 'node-tree-connector branch-end'
+                  ? `node-tree-connector branch-end${hasNextSibling ? ' has-next-sibling' : ''}`
                   : continuationDepths.includes(level)
                     ? 'node-tree-connector continues'
                     : 'node-tree-connector'
@@ -1139,7 +1142,10 @@ export const NodeCard = memo(function NodeCard({
         onKeyDown={handleKeyDown}
         onClick={(event) => {
           event.stopPropagation();
+          if (event.target instanceof Element && event.target.closest('button, input, textarea, select, [contenteditable="true"]')) return;
+          cardRef.current?.focus();
           onSelect?.(node.id);
+          onOpenBrief?.(node.id);
         }}
         onContextMenu={(event) => openContextMenu(event)}
         draggable={dragMode === 'native'}

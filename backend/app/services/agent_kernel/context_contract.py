@@ -76,6 +76,7 @@ def _compact_structural_operations(payload: dict[str, Any]) -> list[dict[str, An
                     "emoji",
                     "priority",
                     "status",
+                    "planned_date",
                     "deadline_at",
                     "time_estimate_minutes",
                 )
@@ -370,6 +371,7 @@ def _looks_like_task_item(value: dict[str, Any], parent_key: str | None) -> bool
             "node_type",
             "parent_id",
             "priority",
+            "planned_date",
             "deadline_at",
             "time_estimate_minutes",
             "child_count",

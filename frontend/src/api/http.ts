@@ -1,5 +1,14 @@
 type JsonObject = Record<string, unknown>;
 
+export class ApiError extends Error {
+  readonly status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 function asObject(value: unknown): JsonObject | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
     ? (value as JsonObject)
@@ -46,7 +55,7 @@ export async function readJson<T>(response: Response): Promise<T> {
   } catch {
     // Keep the status-based fallback when the response has no JSON body.
   }
-  throw new Error(message);
+  throw new ApiError(message, response.status);
 }
 
 /** Execute one API request and decode its JSON response consistently. */

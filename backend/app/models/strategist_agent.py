@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import uuid4
 
+from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
 
@@ -31,7 +32,8 @@ class StrategistAgentEvent(SQLModel, table=True):
     sequence: int = Field(default=0, index=True)
     event_type: str = Field(max_length=64, index=True)
     source: str = Field(default="agent_kernel", max_length=64, index=True)
-    payload_json: str = Field(max_length=32000)
+    # Full review/simulation events exceed 32k; preserve the continuity JSON.
+    payload_json: str = Field(sa_column=Column(Text, nullable=False))
     created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
 
 

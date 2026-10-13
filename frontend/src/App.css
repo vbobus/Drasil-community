@@ -1,7 +1,7 @@
 .app-root {
   display: flex;
-  height: 100dvh;
-  min-height: 100dvh;
+  height: var(--visual-viewport-height, 100dvh);
+  min-height: 0;
   background:
     radial-gradient(circle at top left, color-mix(in srgb, var(--color-cat-work-tint) 84%, white 16%) 0%, transparent 24%),
     radial-gradient(circle at top right, color-mix(in srgb, var(--color-cat-growth-tint) 82%, white 18%) 0%, transparent 22%),
@@ -304,6 +304,33 @@
   height: 100%;
 }
 
+/* The weekly board is the workspace canvas. Side panels stay fixed above it. */
+.app-root .app-main:has(.app-shell-floating) { padding: 0; }
+.app-shell.app-shell-floating { position: relative; display: block; container-type: inline-size; --tree-panel-width: min(var(--preferred-tree-panel-width, 300px), calc((100cqw - 360px) / 2)); --calendar-panel-width: min(var(--preferred-calendar-panel-width, 380px), calc((100cqw - 360px) / 2)); --board-left-inset: 0px; --board-right-inset: var(--calendar-panel-width); }
+.app-shell-floating:has(.floating-task-repository:not([hidden])) { --board-left-inset: var(--tree-panel-width, 300px); }
+.app-shell-floating:has(.panel-calendar.is-collapsed) { --board-right-inset: 0px; }
+.app-shell-floating.has-expanded-calendar:has(.panel-calendar:not(.is-collapsed)) { --calendar-panel-width: min(980px, calc(100cqw - 320px)); --board-controls-left-inset: 0px; --planning-day-width: 320px; }
+.app-shell-floating.has-expanded-calendar > [data-resize-boundary="ai-calendar"] { display: none; }
+.app-shell-floating > .panel-planning { height: 100%; }
+.app-shell-floating > .panel-calendar { position: absolute; z-index: 40; top: 0; right: 0; bottom: 0; width: var(--calendar-panel-width, 380px); max-width: 100%; border: 0; border-radius: 0; background: var(--color-bg-surface); box-shadow: -10px 0 28px -12px rgba(0, 0, 0, 0.35); }
+.app-shell-floating > .panel-calendar.is-collapsed { display: none; }
+.app-shell-floating > .panel-calendar > .workspace-panel-toggle { display: none; }
+.app-root .app-shell-floating .calendar-shell { border: 0; border-radius: 0; box-shadow: none; padding: 10px 12px 8px; background: var(--color-bg-surface); }
+.app-shell-floating .calendar-shell-title { font-size: 17px; }
+.app-shell-floating .calendar-heading-row { flex-wrap: wrap; gap: 6px; }
+.app-root .app-shell-floating .calendar-view-btn:not(.is-active) { color: var(--color-text-secondary); }
+.app-shell-floating > .workspace-panel-resizer { position: absolute; z-index: 41; top: 0; bottom: 0; width: 8px; }
+.app-shell-floating > [data-resize-boundary="planning-ai"] { left: calc(var(--tree-panel-width, 300px) - 4px); }
+.app-shell-floating > [data-resize-boundary="ai-calendar"] { right: calc(var(--calendar-panel-width, 380px) - 4px); }
+.app-shell-floating:has(.floating-task-repository[hidden]) > [data-resize-boundary="planning-ai"],
+.app-shell-floating:has(.panel-calendar.is-collapsed) > [data-resize-boundary="ai-calendar"] { display: none; }
+@media (max-width: 1023px) {
+  .app-shell.app-shell-floating { --tree-panel-width: min(var(--preferred-tree-panel-width, 300px), 100cqw); --board-left-inset: 0px; --board-right-inset: 0px; }
+  .app-shell-floating:has(.floating-task-repository:not([hidden])) { --board-left-inset: 0px; }
+  .app-shell-floating > .panel-calendar { inset: 0; width: 100%; max-width: none; }
+  .app-shell-floating.has-expanded-calendar:has(.panel-calendar:not(.is-collapsed)) { --calendar-panel-width: 100cqw; --planning-day-width: 88%; }
+}
+
 .workspace-panel-resizer {
   position: relative;
   align-self: stretch;
@@ -349,9 +376,11 @@ body.is-resizing-workspace * {
   user-select: none !important;
 }
 
-@media (min-width: 1280px) {
+@media (min-width: 1024px) {
   .app-shell {
     gap: 0;
+    overflow-x: auto;
+    grid-template-rows: minmax(0, 1fr);
   }
 }
 
@@ -366,6 +395,10 @@ body.is-resizing-workspace * {
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 18px 38px -28px rgba(15, 23, 42, 0.28);
   overflow: hidden;
+}
+
+.responsive-workspace-nav {
+  display: none;
 }
 
 .ai-workspace-header {
@@ -520,24 +553,53 @@ body.is-resizing-workspace * {
   box-shadow: 0 18px 34px -24px rgba(55, 108, 246, 0.86);
 }
 
-@media (max-width: 1279px) {
-  .app-toolbar {
-    flex-direction: column;
-    align-items: stretch;
+@media (max-width: 1023px) {
+  .responsive-workspace-nav {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    flex: 0 0 auto;
+    margin-bottom: 6px;
+    padding: 4px;
+    border: 1px solid var(--color-border-subtle);
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--color-bg-surface) 92%, transparent);
+    box-shadow: var(--shadow-rest);
   }
 
-  .app-toolbar-actions {
-    justify-content: space-between;
+  .responsive-workspace-nav button {
+    min-height: 44px;
+    padding: 0 12px;
+    border-radius: 10px;
+    color: var(--color-text-secondary);
+    font-size: 0.82rem;
+    font-weight: 750;
+    touch-action: manipulation;
+  }
+
+  .responsive-workspace-nav button.is-active {
+    background: var(--color-cat-work-tint);
+    color: var(--color-cat-work);
+    box-shadow: var(--shadow-rest);
+  }
+
+  .responsive-workspace-nav button:focus-visible {
+    outline: 2px solid var(--color-cat-work);
+    outline-offset: 1px;
   }
 
   .app-shell {
-    grid-template-columns: minmax(0, 1fr) minmax(280px, 0.9fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .workspace-panel-slot:not(.is-responsive-active) {
+    display: none;
   }
 
   .workspace-panel-calendar {
-    grid-column: 2;
-    grid-row: 1 / span 2;
+    grid-column: auto;
+    grid-row: auto;
   }
 }
 
@@ -551,18 +613,14 @@ body.is-resizing-workspace * {
     flex: 1;
   }
 
-  .app-shell {
-    grid-template-columns: repeat(3, minmax(280px, 1fr));
-    grid-template-rows: minmax(0, 1fr);
-    overflow-x: auto;
-    overflow-y: hidden;
-    padding-bottom: var(--space-1);
-  }
+  .app-shell { padding-bottom: var(--space-1); }
 }
 
 @media (max-width: 767px) {
   .app-main {
-    padding: var(--space-3);
+    padding:
+      6px max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   }
 
   .app-toolbar-actions {
@@ -579,7 +637,7 @@ body.is-resizing-workspace * {
 
   .app-shell {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: repeat(3, minmax(0, 1fr));
+    grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
   }
 
@@ -590,5 +648,20 @@ body.is-resizing-workspace * {
   .workspace-panel-calendar {
     grid-column: auto;
     grid-row: auto;
+  }
+}
+
+@media (pointer: coarse) {
+  button,
+  [role='button'],
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  .responsive-workspace-nav button,
+  .ai-workspace-tabs button {
+    min-height: 44px;
   }
 }

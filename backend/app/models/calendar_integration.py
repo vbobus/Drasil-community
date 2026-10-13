@@ -6,6 +6,8 @@ from datetime import datetime
 from typing import Optional
 
 from sqlmodel import Field, SQLModel
+from sqlalchemy import Column
+from app.db.encrypted import PrivateToken
 
 
 class CalendarIntegration(SQLModel, table=True):
@@ -18,8 +20,8 @@ class CalendarIntegration(SQLModel, table=True):
     google_calendar_summary: str = Field(default="Drasil", max_length=128)
     google_account_email: Optional[str] = Field(default=None, max_length=256)
     time_zone: str = Field(default="UTC", max_length=64)
-    access_token: Optional[str] = Field(default=None, max_length=4096)
-    refresh_token: Optional[str] = Field(default=None, max_length=4096)
+    access_token: Optional[str] = Field(default=None, sa_column=Column(PrivateToken()))
+    refresh_token: Optional[str] = Field(default=None, sa_column=Column(PrivateToken()))
     token_type: Optional[str] = Field(default=None, max_length=64)
     scope: Optional[str] = Field(default=None, max_length=1024)
     expires_at: Optional[datetime] = Field(default=None)

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect Drasil</title>
+    <link rel="stylesheet" href="./launcher.css" />
+  </head>
+  <body>
+    <main>
+      <div class="brand-mark" aria-hidden="true">D</div>
+      <p class="eyebrow">Drasil desktop</p>
+      <h1>Connect to your workspace</h1>
+      <p class="intro">
+        Enter the HTTPS address served by your Drasil VPS. The desktop app remembers only this
+        address; your password and session remain inside the protected web session.
+      </p>
+
+      <form id="server-form">
+        <label for="server-url">Drasil server</label>
+        <input
+          id="server-url"
+          name="serverUrl"
+          type="url"
+          inputmode="url"
+          autocomplete="url"
+          spellcheck="false"
+          required
+          autofocus
+          placeholder="https://drasil.example.ts.net"
+        />
+        <p class="hint">
+          Tailscale Serve addresses end in <code>.ts.net</code>. Local development may use
+          <code>http://localhost:8000</code>.
+        </p>
+        <p id="error-message" class="error" role="alert" hidden></p>
+        <button id="connect-button" type="submit">Connect securely</button>
+      </form>
+
+      <section class="architecture-note" aria-label="How synchronization works">
+        <strong>One server, every screen</strong>
+        <span>Windows, browser, phone, and iPad all read and update the same account data.</span>
+      </section>
+    </main>
+    <script src="./launcher.js"></script>
+  </body>
+</html>

@@ -487,21 +487,19 @@ export function ReviewDocumentCard({
   return (
     <article className="review-document-card" aria-labelledby={titleId}>
       <header>
-        <p className="review-document-eyebrow">Review before applying</p>
         <h4 id={titleId}>
           <ReviewCopy text={document.summary} taskReferences={taskReferences} />
         </h4>
       </header>
 
       <div className="review-document-blocks">
-        {document.blocks.map((block) => (
-          <ReviewBlock
-            key={block.blockId}
-            block={block}
-            taskReferences={taskReferences}
-            headingId={`${idPrefix}-${block.blockId}-title`}
-          />
-        ))}
+        {document.blocks.map((block) => {
+          const content = <ReviewBlock block={block} taskReferences={taskReferences}
+            headingId={`${idPrefix}-${block.blockId}-title`} />;
+          return block.kind === 'entity_references'
+            ? <details className="review-supporting-details" key={block.blockId}><summary>Included tasks</summary>{content}</details>
+            : <div key={block.blockId}>{content}</div>;
+        })}
       </div>
 
       {document.decisions.map((decision) => (
@@ -551,9 +549,9 @@ export function ReviewDocumentCard({
             const label = control.action === 'decision'
               ? decisionCopy?.label ?? 'Choose this option'
               : control.action === 'approve'
-                ? 'Approve and apply'
+                ? 'Apply changes'
                 : control.action === 'edit'
-                  ? 'Edit request'
+                  ? 'Revise'
                   : control.action === 'reject'
                     ? 'Reject'
                     : 'Retry';

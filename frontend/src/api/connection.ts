@@ -36,6 +36,8 @@ export function normalizeBackendUrl(value: string): string {
 }
 
 export function getBackendUrl(): string {
+  const environment = (import.meta as ImportMeta & { env?: { VITE_DRASIL_HOSTED?: string } }).env;
+  if (environment?.VITE_DRASIL_HOSTED === '1') return '';
   const stored = window.localStorage.getItem(BACKEND_URL_KEY);
   if (stored !== null) return stored;
   try {
@@ -66,6 +68,10 @@ export function setSession(token: string, account: DrasilAccount): void {
 }
 
 export function clearSession(): void {
+  for (const key of Object.keys(window.sessionStorage)) {
+    if (key.startsWith('drasil.workspace.v1:')) window.sessionStorage.removeItem(key);
+  }
+  window.dispatchEvent(new Event('drasil:clear-workspace'));
   window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
   window.sessionStorage.removeItem(ACCOUNT_KEY);
 }

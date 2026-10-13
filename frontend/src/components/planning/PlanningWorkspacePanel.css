@@ -950,8 +950,9 @@ body.app-pointer-dragging .planning-tree-virtual-row .node-card {
   display: flex;
   align-items: center;
   gap: 9px;
-  padding: 0 7px 0 12px;
-  color: color-mix(in srgb, var(--workspace-color, #6366f1) 76%, #334155 24%);
+  padding: 4px 0 0;
+  border-top: 1px solid var(--color-border-strong);
+  color: var(--color-text-secondary);
   font-size: 0.64rem;
   font-weight: 800;
   letter-spacing: 0.045em;
@@ -959,14 +960,7 @@ body.app-pointer-dragging .planning-tree-virtual-row .node-card {
 }
 
 .planning-tree-workspace-divider::after {
-  content: '';
-  height: 1px;
-  flex: 1 1 auto;
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--workspace-color, #6366f1) 38%, #dce4f0 62%),
-    color-mix(in srgb, var(--workspace-color, #6366f1) 5%, transparent 95%)
-  );
+  content: none;
 }
 
 .planning-tree-drag-preview {

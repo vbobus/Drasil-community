@@ -1,129 +1,75 @@
-# Deployment and multi-user setup
+# Run Drasil
 
-Drasil supports two layouts with the same application build:
+Choose a persistent Docker server for SQLite, or [Vercel + Neon](HOSTING.md) for hosted PostgreSQL. A static frontend alone cannot store your account data.
 
-1. **One machine:** a single container serves the frontend and backend at one
-   address. This is the easiest and safest default.
-2. **Split frontend and backend:** the backend runs on a VPS, home server, or
-   another machine while a browser loads the frontend elsewhere and connects to
-   the backend's HTTPS address.
+## Docker on a server
 
-Accounts work the same in both layouts. Each account receives a separate SQLite
-database, Codex home, provider-settings file, Google OAuth tokens, checkpoint
-database, and remembered preferences. The small account registry contains
-usernames, password hashes, and hashed session tokens—not planning data or raw
-passwords.
-
-## One-container setup
+Clone the Community repository and copy `.env.example` to your private `.env`. Generate a setup token:
 
 ```sh
-cp .env.example .env
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Paste the generated value into `DRASIL_BOOTSTRAP_TOKEN` in `.env`, then start:
+Set `DRASIL_BOOTSTRAP_TOKEN` to that value. Keep `DRASIL_BIND_ADDRESS=127.0.0.1` and `DRASIL_PORT=8000` when an HTTPS proxy runs on the same host.
 
 ```sh
 docker compose up --build -d
 docker compose ps
 ```
 
-Open <http://localhost:8000>. Leave the backend address blank, enter the setup
-token once, and create the first administrator. Add other accounts under
-**Settings → Accounts & server**. Each new account opens an empty workspace with
-default categories and can save its own AI provider, API key, Codex login, and
-calendar connection.
+Open the local address or your configured HTTPS origin. Leave the backend address blank and create the first administrator with the setup token. Later accounts are created by an administrator in **Settings > Accounts & server**; they start empty.
 
-The Compose file binds to `127.0.0.1` by default. Data is in the `drasil-data`
-Docker volume. The image does not contain personal data, environment files,
-credentials, private evaluations, or a prebuilt database.
+The `drasil-data` volume contains the account registry and each account's SQLite databases and private settings. Never put this volume, `.env`, provider settings, or OAuth tokens in Git or a public image.
 
-Never set `DRASIL_TEST_ISOLATED_DB=1` in a real deployment. That flag disables
-account enforcement only for isolated automated test databases.
+The standard image supports an explicitly configured OpenAI API connection. It does not include the Codex CLI. Subscription login needs a source install with Codex installed, or a custom container with the CLI and persistent per-account Codex homes.
 
-The standard container supports the OpenAI API provider. The Codex CLI is not
-bundled into the image; using the ChatGPT/Codex-login provider in a container
-requires a custom image that installs the CLI. Source installs can use a Codex
-CLI already installed on the machine.
+## Remote access
 
-## Existing single-user installation
+Keep port 8000 private. Put an HTTPS reverse proxy or a private Tailscale connection in front of it. Do not send account passwords or sessions over network HTTP.
 
-On first account creation, Drasil adopts an existing `drasil.db` when
-`DRASIL_LEGACY_DATABASE_PATH` points to it. It also copies existing local
-provider and Google settings—and an existing Codex `auth.json` when available—
-into the first account's private directory. Originals are left in place so the
-migration is recoverable. Later accounts always start empty.
+For a host already joined to Tailscale:
 
-Back up the account registry and all account directories together. Restoring
-only one side can leave data present but impossible to sign into. For Compose,
-back up the complete `drasil-data` volume while Drasil is stopped.
-
-## Backend on a VPS or home server
-
-Keep port 8000 private and put one of these in front of it:
-
-- a Tailscale connection available only to your tailnet;
-- an SSH tunnel for occasional personal access; or
-- an HTTPS reverse proxy such as Caddy, nginx, or Traefik.
-
-Do not send Drasil passwords or session tokens over plain HTTP across a network.
-Account login protects who may read data, while TLS/Tailscale protects the login
-and data while they travel between browser and server.
-
-Recommended VPS `.env` values:
-
-```dotenv
-DRASIL_BIND_ADDRESS=127.0.0.1
-DRASIL_PORT=8000
-DRASIL_BOOTSTRAP_TOKEN=
-DRASIL_FRONTEND_ORIGIN=https://drasil.example.com
-DRASIL_CORS_ORIGINS=https://drasil.example.com
-GOOGLE_CALENDAR_REDIRECT_URI=https://api.drasil.example.com/api/v1/calendar-integrations/google/callback
+```sh
+tailscale serve --bg http://127.0.0.1:8000
+tailscale serve status
 ```
 
-Set `DRASIL_BOOTSTRAP_TOKEN` to a random value before the first remote setup.
-After the administrator exists, the token is no longer accepted; it may be
-removed from the environment. Restrict reverse-proxy request sizes and add a
-proxy-level login rate limit if the service is internet-facing. Drasil also has
-a small in-process password-guessing brake, but the edge proxy is the better
-place for a durable limit across restarts and multiple workers.
+Use the printed HTTPS address on devices in the same tailnet. Set `DRASIL_FRONTEND_ORIGIN` to your own address. With one origin, `DRASIL_CORS_ORIGINS` stays blank. Tailscale Funnel is a different, public exposure option and is not part of this private setup. See [desktop and remote access](DESKTOP_AND_REMOTE_ACCESS.md) for the complete workflow.
 
-## Frontend on a different machine or host
+For a public reverse proxy, set your own HTTPS origin, apply request-size and login-rate limits, and proxy `/api/` to the backend. Protect the host, keep dependencies updated, and avoid exposing its direct port.
 
-The frontend has no private build-time configuration. Build and serve it as
-static files:
+## Separate frontend
 
 ```sh
 npm ci --prefix frontend
 npm --prefix frontend run build
 ```
 
-Serve `frontend/dist` using any static web server. On its first screen, enter
-the backend base address, for example `https://api.drasil.example.com`. The
-address is remembered in that browser; the login token is kept only in the
-current browser tab. The backend must list the frontend's exact origin in
-`DRASIL_CORS_ORIGINS`. Wildcard CORS is intentionally unsupported.
+Serve `frontend/dist` on your static host. On the first screen, enter the backend base URL, such as `https://api.drasil.example.com`. Configure that frontend's exact HTTPS origin in the backend's `DRASIL_CORS_ORIGINS`; wildcard credentialed CORS is unsupported. An HTTPS frontend requires an HTTPS backend.
 
-If frontend and backend share the same hostname through a reverse proxy, route
-`/api/` to FastAPI and all other paths to the frontend. In that layout, leave
-the backend address blank and no CORS customization is needed.
+When both share a reverse-proxy origin, route `/api/` to FastAPI and everything else to the frontend, and leave the backend address blank. For Vercel's single-project layout, follow [the hosted guide](HOSTING.md) instead.
 
-## Google Calendar and local MCP
+## AI, calendars, and tracing
 
-Google OAuth client credentials are server-wide, while each account's OAuth
-tokens and calendar records are isolated. Register the backend callback URL
-exactly as `GOOGLE_CALENDAR_REDIRECT_URI`.
+AI is optional. Choose ChatGPT/Codex or an OpenAI API connection in Settings; API calls are separately billed. Never paste tokens into a URL or commit them.
 
-The local stdio MCP server must be bound to one account. If the server has more
-than one account, set `DRASIL_MCP_ACCOUNT` to that account's username before
-starting `python -m app.mcp_server`. This prevents one local MCP process from
-silently crossing between users.
+Google Calendar requires your own OAuth client, consent-screen configuration, and an exact callback URL, for example `https://drasil.example.com/api/v1/calendar-integrations/google/callback`. Client settings are server-wide; tokens and calendar records belong to their account. Drasil's calendar works without Google sync.
 
-## Why remote access is configured this way
+Langfuse tracing is optional. Leave its keys blank to disable it. Aggregate mode excludes application content; full mode exports prompts, responses, and tool payloads to the configured tracing service. Choose deliberately before enabling full mode.
 
-The pattern follows the useful parts of OpenClaw's gateway model: local access
-defaults to loopback, remote clients specify an explicit server URL, and remote
-access is expected to use authentication plus Tailscale, an SSH tunnel, or TLS.
-See OpenClaw's [gateway](https://github.com/openclaw/openclaw/blob/main/docs/gateway/index.md)
-and [security](https://github.com/openclaw/openclaw/blob/main/docs/gateway/security/index.md)
-documentation for the analogous deployment boundary.
+Never enable `DRASIL_TEST_ISOLATED_DB=1` in a real deployment: it is an automated-test bypass, not a server configuration option.
+
+## Backups and upgrades
+
+Back up the complete `drasil-data` volume while the service is stopped. Keep the registry and account directories together; recovering just one side can leave data inaccessible. Protect the backup as private data.
+
+```sh
+docker compose down
+# Make and verify your private volume backup here.
+git pull --ff-only
+docker compose up --build -d
+```
+
+Do not run `docker compose down -v` unless you intend to delete the data volume. Check sign-in, a task, a calendar view, and Habits after updating.
+
+Existing single-user SQLite installations can be adopted by the first account through `DRASIL_LEGACY_DATABASE_PATH`; back up first. Subsequent accounts always start empty. Hosted PostgreSQL starts separately and does not import your local files.

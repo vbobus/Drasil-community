@@ -9,16 +9,23 @@ import type {
   RefObject,
 } from 'react';
 import type { CalendarBlock, CalendarBlockChild, CalendarViewMode } from '../../types/calendar';
-import type { NodeDragPayload } from '../../types/node';
-import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DayTaskHolder } from './DayTaskHolder';
+import { categoryAccent, categoryFill } from '../../lib/categoryPalette';
+import type { StrategyNode, NodeDragPayload } from '../../types/node';
+import { CalendarDays, ChevronLeft, ChevronRight, GripVertical, MoveVertical, SlidersHorizontal } from 'lucide-react';
 import { calendarRolloverState } from '../../lib/calendarRollover';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import './SharedCalendarCanvas.css';
 
 interface SharedCalendarCanvasProps {
   accentColor: string;
   headingId: string;
   blocks: CalendarBlock[];
+  dayTasks?: StrategyNode[];
+  onAddTask?: (day: string) => void;
+  onAssignDay?: (id: string, day: string) => void;
   visibleDate: Date;
+  onDateSelect?: (date: Date) => void;
   viewMode: CalendarViewMode;
   detailLevel: number;
   isLoading: boolean;
@@ -34,6 +41,7 @@ interface SharedCalendarCanvasProps {
   onTaskDrop: (payload: NodeDragPayload, clientX: number, clientY: number) => boolean;
   onBlockTimeChange: (block: CalendarBlock, startAt: string, endAt: string) => void;
   onBlockDelete: (block: CalendarBlock) => void;
+  onBlockUnschedule?: (block: CalendarBlock, day: string) => void;
   onTaskStatusChange: (id: string, done: boolean) => void;
   onTaskFocus: (taskId: string, categoryId: number) => void;
 }
@@ -519,7 +527,11 @@ export function SharedCalendarCanvas({
   accentColor,
   headingId,
   blocks,
+  dayTasks = [],
+  onAddTask,
+  onAssignDay,
   visibleDate,
+  onDateSelect,
   viewMode,
   detailLevel,
   isLoading,
@@ -535,9 +547,11 @@ export function SharedCalendarCanvas({
   onTaskDrop,
   onBlockTimeChange,
   onBlockDelete,
+  onBlockUnschedule,
   onTaskStatusChange,
   onTaskFocus,
 }: SharedCalendarCanvasProps) {
+  const compact = useMediaQuery('(max-width: 1023px)');
   const hours = Array.from({ length: dayEndHour - dayStartHour + 1 }, (_, index) =>
     dayStartHour + index
   );
@@ -546,6 +560,7 @@ export function SharedCalendarCanvas({
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [isEditingBlock, setIsEditingBlock] = useState(false);
   const [interactionPreview, setInteractionPreview] = useState<InteractionPreview | null>(null);
+  const [untimedDropDay, setUntimedDropDay] = useState<string | null>(null);
   const [optimisticTaskSnapshot, setOptimisticTaskSnapshot] = useState<{
     sourceBlocks: CalendarBlock[] | null;
     statuses: Record<string, string>;
@@ -567,6 +582,20 @@ export function SharedCalendarCanvas({
   const suppressClickBlockIdRef = useRef<string | null>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const calendarShellRef = useRef<HTMLDivElement>(null);
+  const agendaRef = useRef<HTMLDivElement>(null);
+  const dateAxisRef = useRef<HTMLDivElement>(null);
+  const pointerCleanupRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => pointerCleanupRef.current?.(), []);
+  useEffect(() => {
+    const agenda = agendaRef.current;
+    const axis = dateAxisRef.current;
+    if (!agenda) return;
+    const measure = () => agenda.style.setProperty('--calendar-sticky-header-height', `${Math.ceil(axis?.getBoundingClientRect().height ?? 0)}px`);
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (axis) observer.observe(axis);
+    return () => { observer.disconnect(); agenda.style.removeProperty('--calendar-sticky-header-height'); };
+  }, [viewMode]);
   const now = new Date();
   const weekDays = useMemo(() => buildWeekDays(visibleDate), [visibleDate]);
   const monthDays = useMemo(() => buildMonthDays(visibleDate), [visibleDate]);
@@ -602,6 +631,10 @@ export function SharedCalendarCanvas({
     [dayEndHour, daySegments, dayStartHour, rowHeight],
   );
   const hasBlocks = visibleSegments.length > 0;
+  const activeBlockSegment = activeBlock
+    ? visibleSegments.find(segment => segment.block.id === activeBlock.id)
+      ?? segmentsForDay([activeBlock], startOfLocalDay(new Date(activeBlock.startAt)))[0]
+    : null;
   const visibleBlockById = useMemo(
     () => new Map(blocks.map((block) => [block.id, block])),
     [blocks],
@@ -636,6 +669,13 @@ export function SharedCalendarCanvas({
   }, [activeBlock]);
 
   useEffect(() => {
+    if (!activeBlockId) return;
+    const trigger = document.activeElement;
+    popoverRef.current?.querySelector<HTMLButtonElement>('[aria-label="Close calendar block details"]')?.focus({ preventScroll: true });
+    return () => { if (trigger instanceof HTMLElement && trigger.isConnected) trigger.focus({ preventScroll: true }); };
+  }, [activeBlockId]);
+
+  useEffect(() => {
     if (viewMode !== 'week') {
       return;
     }
@@ -657,7 +697,8 @@ export function SharedCalendarCanvas({
     }
 
     event.preventDefault();
-    event.dataTransfer.dropEffect = 'copy';
+    // Untimed cards move onto the clock; selected-task references allow copying.
+    event.dataTransfer.dropEffect = event.dataTransfer.effectAllowed === 'move' ? 'move' : 'copy';
   };
 
   const handleDrop = (event: DragEvent<HTMLElement>) => {
@@ -672,7 +713,8 @@ export function SharedCalendarCanvas({
   };
 
   const openBlockDetails = (block: CalendarBlock) => {
-    onTaskFocus(block.taskId, block.categoryId);
+    // Mobile keeps the calendar visible while inspecting its booking.
+    if (!compact) onTaskFocus(block.taskId, block.categoryId);
     setActiveBlockId(block.id);
     setIsEditingBlock(false);
     setEditStartAt(formatDateTimeInput(new Date(block.startAt)));
@@ -782,15 +824,25 @@ export function SharedCalendarCanvas({
     };
   };
 
+  const untimedDayAt = (block: CalendarBlock, x: number, y: number) => {
+    if (!onBlockUnschedule || !['scheduled', 'protected'].includes(block.variant)) return null;
+    const holder = document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-day-holder]');
+    return holder && calendarShellRef.current?.contains(holder) ? holder.dataset.dayHolder ?? null : null;
+  };
+
   const beginBlockPointerInteraction = (
     segment: CalendarBlockSegment,
     event: ReactPointerEvent<HTMLElement>,
     interaction: CalendarBlockInteraction,
+    fromDetails = false,
   ) => {
     const { block } = segment;
-    if (event.button !== 0) {
+    if (event.button !== 0 || !event.isPrimary) {
       return;
     }
+
+    // A touch swipe on the booking body scrolls. Only explicit handles can drag.
+    if (event.pointerType === 'touch' && !(event.target instanceof Element && event.target.closest('[data-calendar-drag-control]'))) return;
 
     if (
       event.target instanceof HTMLElement &&
@@ -801,8 +853,11 @@ export function SharedCalendarCanvas({
 
     event.preventDefault();
     event.stopPropagation();
-    setActiveBlockId(null);
+    pointerCleanupRef.current?.();
+    if (!fromDetails) setActiveBlockId(null);
 
+    const pointerId = event.pointerId;
+    const captureTarget = event.currentTarget;
     const startX = event.clientX;
     const startY = event.clientY;
     const startMinute = segment.startAt <= segment.date
@@ -814,10 +869,13 @@ export function SharedCalendarCanvas({
       segment.date,
     );
     const pointerOffsetMinutes =
-      interaction === 'move'
+      interaction === 'move' && !fromDetails
         ? Math.max(0, startPointer.minutes - startMinute)
         : 0;
     let didStartDrag = false;
+    let frame: number | null = null;
+    let latestX = startX;
+    let latestY = startY;
     let latestPreview = previewForPointer(
       segment,
       interaction,
@@ -832,30 +890,42 @@ export function SharedCalendarCanvas({
     };
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
-      if (!didStartDrag && distance < POINTER_DRAG_THRESHOLD) {
+      if (!didStartDrag && distance < (event.pointerType === 'touch' ? 8 : POINTER_DRAG_THRESHOLD)) {
         return;
       }
 
       moveEvent.preventDefault();
+      if (!didStartDrag && fromDetails) {
+        if (captureTarget.hasPointerCapture(pointerId)) captureTarget.releasePointerCapture(pointerId);
+        setActiveBlockId(null);
+      }
       didStartDrag = true;
-      latestPreview = previewForPointer(
-        segment,
-        interaction,
-        moveEvent.clientX,
-        moveEvent.clientY,
-        pointerOffsetMinutes,
-      );
-      setInteractionPreview(latestPreview);
+      latestX = moveEvent.clientX;
+      latestY = moveEvent.clientY;
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        const day = interaction === 'move' ? untimedDayAt(block, latestX, latestY) : null;
+        setUntimedDropDay(day);
+        if (day) { setInteractionPreview(null); return; }
+        latestPreview = previewForPointer(segment, interaction, latestX, latestY, pointerOffsetMinutes);
+        setInteractionPreview(latestPreview);
+      });
     };
 
     const clearPointerListeners = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = null;
+      pointerCleanupRef.current = null;
     };
 
     const handlePointerUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
       clearPointerListeners();
       if (!didStartDrag) {
         setInteractionPreview(null);
@@ -863,6 +933,8 @@ export function SharedCalendarCanvas({
       }
 
       upEvent.preventDefault();
+      const day = interaction === 'move' ? untimedDayAt(block, upEvent.clientX, upEvent.clientY) : null;
+      setUntimedDropDay(null);
       latestPreview = previewForPointer(
         segment,
         interaction,
@@ -877,14 +949,20 @@ export function SharedCalendarCanvas({
           suppressClickBlockIdRef.current = null;
         }
       }, 0);
-      commitPreview(latestPreview);
+      if (day) onBlockUnschedule?.(block, day);
+      else commitPreview(latestPreview);
     };
 
-    const handlePointerCancel = () => {
+    const cancel = () => {
       clearPointerListeners();
       setInteractionPreview(null);
+      setUntimedDropDay(null);
+    };
+    const handlePointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId === pointerId) cancel();
     };
 
+    pointerCleanupRef.current = cancel;
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerCancel);
@@ -1010,40 +1088,68 @@ export function SharedCalendarCanvas({
   const beginDateCardPointerInteraction = (
     segment: CalendarBlockSegment,
     event: ReactPointerEvent<HTMLElement>,
+    fromDetails = false,
   ) => {
     const { block } = segment;
-    if (event.button !== 0) {
+    if (event.button !== 0 || !event.isPrimary) {
       return;
     }
+    if (event.pointerType === 'touch' && !(event.target instanceof Element && event.target.closest('[data-calendar-drag-control]'))) return;
 
+    if (event.pointerType === 'touch') event.preventDefault();
     event.stopPropagation();
+    pointerCleanupRef.current?.();
+    if (!fromDetails) setActiveBlockId(null);
+    const pointerId = event.pointerId;
+    const captureTarget = event.currentTarget;
     const startX = event.clientX;
     const startY = event.clientY;
     let didStartDrag = false;
+    let frame: number | null = null;
+    let latestX = startX;
+    let latestY = startY;
 
     const clearPointerListeners = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
+      if (frame !== null) window.cancelAnimationFrame(frame);
+      frame = null;
+      pointerCleanupRef.current = null;
     };
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
-      if (!didStartDrag && distance < POINTER_DRAG_THRESHOLD) {
+      if (!didStartDrag && distance < (event.pointerType === 'touch' ? 8 : POINTER_DRAG_THRESHOLD)) {
         return;
       }
 
-      didStartDrag = true;
       moveEvent.preventDefault();
+      if (!didStartDrag && fromDetails) {
+        if (captureTarget.hasPointerCapture(pointerId)) captureTarget.releasePointerCapture(pointerId);
+        setActiveBlockId(null);
+      }
+      didStartDrag = true;
+      latestX = moveEvent.clientX;
+      latestY = moveEvent.clientY;
+      if (frame !== null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        setUntimedDropDay(untimedDayAt(block, latestX, latestY));
+      });
     };
 
     const handlePointerUp = (upEvent: PointerEvent) => {
+      if (upEvent.pointerId !== pointerId) return;
       clearPointerListeners();
       if (!didStartDrag) {
         return;
       }
 
       upEvent.preventDefault();
+      const untimedDay = untimedDayAt(block, upEvent.clientX, upEvent.clientY);
+      setUntimedDropDay(null);
       const target = calendarShellRef.current?.ownerDocument.elementFromPoint(
         upEvent.clientX,
         upEvent.clientY,
@@ -1062,14 +1168,20 @@ export function SharedCalendarCanvas({
             suppressClickBlockIdRef.current = null;
           }
         }, 0);
-        moveBlockToDate(segment, nextDate);
+        if (untimedDay) onBlockUnschedule?.(block, untimedDay);
+        else moveBlockToDate(segment, nextDate);
       }
     };
 
-    const handlePointerCancel = () => {
+    const cancel = () => {
       clearPointerListeners();
+      setUntimedDropDay(null);
+    };
+    const handlePointerCancel = (cancelEvent: PointerEvent) => {
+      if (cancelEvent.pointerId === pointerId) cancel();
     };
 
+    pointerCleanupRef.current = cancel;
     window.addEventListener('pointermove', handlePointerMove, { passive: false });
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerCancel);
@@ -1183,6 +1295,7 @@ export function SharedCalendarCanvas({
           !segment.isLastSegment ? 'continues-after' : '',
           isTinyBlock ? 'is-tiny-block' : '',
           isShortBlock ? 'is-short-block' : '',
+          blockHeightPx >= 88 ? 'has-touch-handles' : '',
           `variant-${block.variant}`,
           rolloverState ? 'is-rollover' : '',
           isPreviewed && density === 'day' ? 'is-being-edited' : '',
@@ -1205,7 +1318,8 @@ export function SharedCalendarCanvas({
             '--block-height': `${heightPercent}%`,
             '--block-height-px': `${blockHeightPx}px`,
             '--block-lane': lane,
-            '--block-color': block.categoryColor,
+            '--block-color': categoryAccent(block.categoryColor),
+            '--block-fill': categoryFill(block.categoryColor),
           } as CSSProperties
         }
         onClick={() => {
@@ -1215,6 +1329,7 @@ export function SharedCalendarCanvas({
           openBlockDetails(block);
         }}
         onKeyDown={(event: ReactKeyboardEvent<HTMLDivElement>) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === 'Enter' || event.key === ' ') {
             event.preventDefault();
             openBlockDetails(block);
@@ -1233,16 +1348,24 @@ export function SharedCalendarCanvas({
           <button
             type="button"
             className="calendar-resize-handle is-start"
+            data-calendar-drag-control="resize-start"
             data-testid={`calendar-resize-start-${block.id}`}
             aria-label="Resize calendar block start"
             onPointerDown={(event) => beginBlockPointerInteraction(segment, event, 'resize-start')}
           />
         )}
         {renderBlockContents(segment)}
+        {blockHeightPx >= 88 && <button type="button" className="calendar-block-move-handle"
+          data-calendar-drag-control="move" aria-label={`Move ${block.title}`} title="Drag to move"
+          onClick={event => { event.stopPropagation(); openBlockDetails(block); }}
+          onPointerDown={event => beginBlockPointerInteraction(segment, event, 'move')}>
+          <GripVertical size={18} aria-hidden="true" />
+        </button>}
         {segment.isLastSegment && (
           <button
             type="button"
             className="calendar-resize-handle is-end"
+            data-calendar-drag-control="resize-end"
             data-testid={`calendar-resize-end-${block.id}`}
             aria-label="Resize calendar block end"
             onPointerDown={(event) => beginBlockPointerInteraction(segment, event, 'resize-end')}
@@ -1279,7 +1402,8 @@ export function SharedCalendarCanvas({
       )}
       style={
         {
-          '--block-color': block.categoryColor,
+          '--block-color': categoryAccent(block.categoryColor),
+            '--block-fill': categoryFill(block.categoryColor),
         } as CSSProperties
       }
       onClick={() => {
@@ -1289,6 +1413,7 @@ export function SharedCalendarCanvas({
         openBlockDetails(block);
       }}
       onKeyDown={(event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (event.target !== event.currentTarget) return;
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           openBlockDetails(block);
@@ -1312,6 +1437,14 @@ export function SharedCalendarCanvas({
       </span>
     </div>
     );
+  };
+
+  const renderDayTasks = (day: Date) => {
+    const key = localDateKey(day);
+    return <DayTaskHolder day={key} isDropTarget={key === untimedDropDay} tasks={dayTasks.filter(task => task.plannedDate === key && !blocks.some(block =>
+      block.taskId === task.id && block.variant !== 'draft' && block.variant !== 'proposed'
+      && new Date(block.startAt) < addDays(startOfLocalDay(day), 1) && new Date(block.endAt) > startOfLocalDay(day)
+    ))} onAdd={onAddTask} onAssign={onAssignDay} onFocus={onTaskFocus} onComplete={onTaskStatusChange} />;
   };
 
   return (
@@ -1371,6 +1504,14 @@ export function SharedCalendarCanvas({
               </button>
             ))}
           </div>
+          <div className="calendar-view-actions">
+          <details className="calendar-detail-menu">
+            <summary aria-label="Calendar detail" title="Calendar detail"><SlidersHorizontal size={16} aria-hidden="true" /></summary>
+            <label className="calendar-detail-control">
+              <span>Detail</span>
+              <input aria-label="Zoom / Detail" type="range" min="0" max="1" step="0.05" value={detailLevel} onChange={event => onDetailLevelChange(Number(event.target.value))} />
+            </label>
+          </details>
           <button
             type="button"
             className="calendar-picker-btn"
@@ -1380,17 +1521,12 @@ export function SharedCalendarCanvas({
           >
             <CalendarDays size={16} aria-hidden="true" />
           </button>
+          </div>
         </div>
       </div>
 
-      <div className="calendar-shell-mobile-placeholder" aria-live="polite">
-        <p className="calendar-shell-mobile-title">Calendar preview hidden on narrow screens</p>
-        <p className="calendar-shell-mobile-copy">
-          Use desktop or tablet width for the full scheduling grid.
-        </p>
-      </div>
-
       <div
+        ref={agendaRef}
         className={[
           'calendar-agenda',
           viewMode === 'week' ? 'is-week-mode' : '',
@@ -1407,6 +1543,7 @@ export function SharedCalendarCanvas({
               {formatGmtOffset(visibleDate)}
             </div>
             <div
+              ref={dateAxisRef}
               className={`calendar-date-axis${
                 viewMode === 'week' ? ' is-week-axis' : ' is-day-axis'
               }`}
@@ -1420,13 +1557,21 @@ export function SharedCalendarCanvas({
                   }${isSameLocalDay(day, visibleDate) ? ' is-current' : ''}`}
                   data-calendar-date={localDateKey(day)}
                 >
-                  <span>{formatAxisWeekday(day)}</span>
-                  <strong>{day.getDate()}</strong>
+                  <button type="button" className="calendar-date-select" aria-label={`Focus ${formatGridDayLabel(day)}`}
+                    aria-pressed={isSameLocalDay(day, visibleDate)} disabled={!onDateSelect} onClick={() => onDateSelect?.(day)}>
+                    <span>{formatAxisWeekday(day)}</span>
+                    <strong>{day.getDate()}</strong>
+                  </button>
+                  {renderDayTasks(day)}
                 </div>
               ))}
             </div>
           </>
         )}
+
+        {viewMode === 'month' && <div ref={dateAxisRef} className="calendar-month-weekdays" aria-label="Days of the week">
+          {weekDays.map(day => <span key={day.getDay()}>{formatAxisWeekday(day)}</span>)}
+        </div>}
 
         {viewMode !== 'month' && (
           <div className="calendar-time-rail" aria-hidden="true">
@@ -1481,6 +1626,9 @@ export function SharedCalendarCanvas({
                     data-calendar-date={localDateKey(day)}
                     data-calendar-time-surface="true"
                     aria-label={formatGridDayLabel(day)}
+                    onClick={event => {
+                      if (event.target instanceof Element && !event.target.closest('button, input, label, a, [data-calendar-block-id]')) onDateSelect?.(day);
+                    }}
                   >
                     <div className="calendar-hour-grid" role="rowgroup">
                       {hours.slice(0, -1).map((hour) => (
@@ -1524,14 +1672,23 @@ export function SharedCalendarCanvas({
                       isSameLocalDay(day, now) ? 'is-today' : '',
                       isSameLocalDay(day, visibleDate) ? 'is-current' : '',
                       isOutsideMonth ? 'is-outside-month' : '',
+                      day >= weekDays[0] && day < addDays(weekDays[0], 7) ? 'is-focused-week' : '',
                     ]
                       .filter(Boolean)
                       .join(' ')}
                     data-testid="calendar-month-day-cell"
                     data-calendar-date={localDateKey(day)}
+                    data-focused-week={day >= weekDays[0] && day < addDays(weekDays[0], 7) ? 'true' : undefined}
                     aria-label={formatGridDayLabel(day, true)}
+                    onClick={event => {
+                      if (event.target instanceof Element && !event.target.closest('button, input, label, a, [data-calendar-block-id]')) onDateSelect?.(day);
+                    }}
                   >
-                    <header>{formatGridDayLabel(day, true)}</header>
+                    <header><button type="button" className="calendar-date-select" aria-label={`Focus ${formatGridDayLabel(day)}`}
+                      aria-pressed={isSameLocalDay(day, visibleDate)} disabled={!onDateSelect} onClick={() => onDateSelect?.(day)}>
+                      {formatGridDayLabel(day, true)}
+                    </button></header>
+                    {renderDayTasks(day)}
                     <div className="calendar-grid-cell-blocks">
                       {dayBlocks.slice(0, 3).map(renderGridCard)}
                       {dayBlocks.length > 3 && (
@@ -1601,6 +1758,17 @@ export function SharedCalendarCanvas({
                   } as CSSProperties
                 }
                 onPointerDown={(event) => event.stopPropagation()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') {
+                    event.preventDefault(); event.stopPropagation(); setActiveBlockId(null); setIsEditingBlock(false);
+                  } else if (event.key === 'Tab') {
+                    const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex="0"]'))
+                      .filter(control => !control.matches(':disabled') && control.getClientRects().length > 0);
+                    const first = controls[0]; const last = controls[controls.length - 1];
+                    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+                    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+                  }
+                }}
               >
                 <div className="calendar-popover-heading">
                   <span>Calendar task details</span>
@@ -1641,6 +1809,29 @@ export function SharedCalendarCanvas({
                     <MoreIcon />
                   </button>
                 </div>
+
+                {activeBlockSegment && <div className="calendar-touch-drag-tools" aria-label="Touch calendar controls">
+                  <p id="calendar-touch-drag-hint">Drag a handle onto the calendar, or tap Edit to enter a time.</p>
+                  <div>
+                    <button type="button" data-calendar-drag-control="move" aria-label="Move calendar block" aria-describedby="calendar-touch-drag-hint"
+                      onClick={() => setIsEditingBlock(true)}
+                      onPointerDown={event => viewMode === 'month'
+                        ? beginDateCardPointerInteraction(activeBlockSegment, event, true)
+                        : beginBlockPointerInteraction(activeBlockSegment, event, 'move', true)}>
+                      <GripVertical size={18} aria-hidden="true" /><span>Move</span>
+                    </button>
+                    {viewMode !== 'month' && <>
+                      <button type="button" data-calendar-drag-control="resize-start" aria-label="Resize calendar block start" aria-describedby="calendar-touch-drag-hint"
+                        onClick={() => setIsEditingBlock(true)} onPointerDown={event => beginBlockPointerInteraction(activeBlockSegment, event, 'resize-start', true)}>
+                        <MoveVertical size={18} aria-hidden="true" /><span>Start</span>
+                      </button>
+                      <button type="button" data-calendar-drag-control="resize-end" aria-label="Resize calendar block end" aria-describedby="calendar-touch-drag-hint"
+                        onClick={() => setIsEditingBlock(true)} onPointerDown={event => beginBlockPointerInteraction(activeBlockSegment, event, 'resize-end', true)}>
+                        <MoveVertical size={18} aria-hidden="true" /><span>End</span>
+                      </button>
+                    </>}
+                  </div>
+                </div>}
 
                 <div className="calendar-popover-body">
                   <span className="calendar-popover-icon" aria-hidden="true">
@@ -1776,23 +1967,6 @@ export function SharedCalendarCanvas({
         </div>
       </div>
 
-      <label className="calendar-detail-control" aria-label="Zoom calendar detail">
-        <span className="calendar-zoom-icon is-low" aria-hidden="true">
-          <span />
-        </span>
-        <input
-          aria-label="Zoom / Detail"
-          type="range"
-          min="0"
-          max="1"
-          step="0.05"
-          value={detailLevel}
-          onChange={(event) => onDetailLevelChange(Number(event.target.value))}
-        />
-        <span className="calendar-zoom-icon is-high" aria-hidden="true">
-          <span />
-        </span>
-      </label>
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { FormEvent, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { AssistantRuntimeProvider, useExternalStoreRuntime, ThreadPrimitive, MessagePrimitive, ComposerPrimitive, ActionBarPrimitive, type ThreadMessageLike } from '@assistant-ui/react';
+import { ArrowDown, ArrowUp, Check, Copy, Pencil, Search, RotateCcw, Square, X } from 'lucide-react';
 import type { Category } from '../../types/category';
 import type { StrategyNode } from '../../types/node';
 import {
@@ -30,8 +31,12 @@ import {
 import { useNodeStore } from '../../store/useNodeStore';
 import drasilLogoUrl from '../../assets/drasil-logo-transparent.png';
 import './StrategistAiCard.css';
+import { ChatMarkdown } from '../ai/ChatMarkdown';
+import { ChatProgress } from '../ai/ChatProgress';
+import { useUiStore } from '../../store/useUiStore';
 import type { AiWorkspaceLaunchRequest } from '../../App';
 import { useCalendarStore } from '../../store/useCalendarStore';
+import { refreshWorkspace, useWorkspaceStore } from '../../store/useWorkspaceStore';
 import { useCategoryStore } from '../../store/useCategoryStore';
 import { normalizePlannerScheduleProposal } from '../../api/planner';
 import { RichAiText, type AiTaskReference } from '../ai/RichAiText';
@@ -115,6 +120,8 @@ function parseStrategistRunEvent(event: MessageEvent<string>): StrategistRunResp
 interface StrategistChatTurn {
   id: string;
   prompt: string;
+  reasoning?: string;
+  streamedAnswer?: string;
   response: StrategistResponse | null;
   error: string | null;
   actionStatus: TurnActionStatus;
@@ -752,13 +759,15 @@ function StrategistTraceTimeline({
   trace: StrategistTrace;
   turnId: string;
 }) {
+  const steps = trace.steps.filter(step => !['Prepared the response', 'Completed the request'].includes(step.title));
+  if (!steps.length) return null;
   return (
     <details className="strategist-trace-panel" aria-label="Steps taken">
       <summary>
-        <span>{trace.steps.length} steps</span>
+        <span>{steps.length} workspace steps</span>
       </summary>
       <ol className="strategist-trace-list">
-        {trace.steps.map((step, index) => {
+        {steps.map((step, index) => {
           const isThought = isReasoningTraceStep(step);
           return (
             <li
@@ -768,7 +777,7 @@ function StrategistTraceTimeline({
               <details className="strategist-trace-step">
                 <summary>
                   <span className="strategist-trace-step-label">
-                    {isThought ? 'Thought' : formatWorkspaceCopy(step.title)}
+                    {formatWorkspaceCopy(step.title)}
                   </span>
                   {typeof step.durationMs === 'number' && (
                     <span className="strategist-trace-duration">
@@ -779,7 +788,6 @@ function StrategistTraceTimeline({
                   )}
                 </summary>
                 <div className="strategist-trace-step-detail">
-                  {isThought && <strong>{formatWorkspaceCopy(step.title)}</strong>}
                   <p>{formatWorkspaceCopy(step.detail)}</p>
                 </div>
               </details>
@@ -886,6 +894,7 @@ function normalizeStrategistResponseForUi(
   return {
     ...(response as StrategistResponse),
     providerLabel: getStringField(response, 'providerLabel', 'provider_label') ?? 'Strategist',
+    reasoningSummary: getStringField(response, 'reasoningSummary', 'reasoning_summary'),
     mode,
     summary:
       getStringField(response, 'summary', 'summary') ??
@@ -909,6 +918,7 @@ function mapTurnRecordToChatTurn(turn: StrategistTurnRecord, isHistorical: boole
   return {
     id: turn.id,
     prompt: turn.prompt,
+    ...(turn.response?.reasoningSummary ? { reasoning: turn.response.reasoningSummary } : {}),
     response: normalizeStrategistResponseForUi(turn.response),
     error: turn.error ?? null,
     actionStatus: 'idle',
@@ -1511,44 +1521,6 @@ function renderStandardProposalSupportContent(
   );
 }
 
-interface StrategistDecisionSummary {
-  paragraphs: string[];
-  bullets: string[];
-}
-
-const DECISION_LINE_PREFIX_RE = /^(\d+[.)]|[-*])\s+/;
-
-function stripDecisionLinePrefix(value: string) {
-  return value.replace(DECISION_LINE_PREFIX_RE, '').trim();
-}
-
-function buildDecisionSummary(summary: string): StrategistDecisionSummary {
-  const displaySummary = formatWorkspaceCopy(summary);
-  const lines = displaySummary
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const hasListShape = lines.some((line) => DECISION_LINE_PREFIX_RE.test(line));
-
-  if (!hasListShape) {
-    return {
-      paragraphs: lines.length > 0 ? lines : [displaySummary],
-      bullets: [],
-    };
-  }
-
-  return {
-    paragraphs: lines
-      .filter((line) => !DECISION_LINE_PREFIX_RE.test(line))
-      .map(stripDecisionLinePrefix)
-      .filter(Boolean),
-    bullets: lines
-      .filter((line) => DECISION_LINE_PREFIX_RE.test(line))
-      .map(stripDecisionLinePrefix)
-      .filter(Boolean),
-  };
-}
-
 function getRevisedSourceProposalId(response: StrategistResponse | null | undefined) {
   const actionResult = response?.actionResult;
   if (
@@ -1582,26 +1554,7 @@ function markReplacedProposalTurns(
 }
 
 function renderDecisionSummary(summary: string, taskReferences: AiTaskReference[]) {
-  const decisionSummary = buildDecisionSummary(summary);
-
-  return (
-    <section className="strategist-decision-panel" aria-label="AI response">
-      {decisionSummary.paragraphs.map((paragraph, index) => (
-        <p key={`${paragraph}-${index}`} className="strategist-summary">
-          <RichAiText text={paragraph} taskReferences={taskReferences} />
-        </p>
-      ))}
-      {decisionSummary.bullets.length > 0 && (
-        <ul className="strategist-summary-list">
-          {decisionSummary.bullets.map((bullet, index) => (
-            <li key={`${bullet}-${index}`}>
-              <RichAiText text={bullet} taskReferences={taskReferences} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
+  return <section className="strategist-decision-panel" aria-label="AI response"><ChatMarkdown text={summary} taskReferences={taskReferences} /></section>;
 }
 
 function isBadgeSuggestion(value: unknown): value is StrategistBadgeSuggestion {
@@ -1748,15 +1701,6 @@ function CloseIcon() {
   );
 }
 
-function SendIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false">
-      <path d="M10 16V4" />
-      <path d="m5.5 8.5 4.5-4.5 4.5 4.5" />
-    </svg>
-  );
-}
-
 export function StrategistAiCard({
   embedded = false,
   activeCategory,
@@ -1770,11 +1714,11 @@ export function StrategistAiCard({
   onRunUpdate,
   onSessionActivity,
 }: StrategistAiCardProps) {
-  const [prompt, setPrompt] = useState('');
   const [turns, setTurns] = useState<StrategistChatTurn[]>([]);
   const [sessions, setSessions] = useState<StrategistSessionSummary[]>([]);
   const [activeSession, setActiveSession] = useState<StrategistSessionSummary | null>(null);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [historyQuery, setHistoryQuery] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activityLabel, setActivityLabel] = useState('Strategist is thinking…');
   const [runActivities, setRunActivities] = useState<StrategistRunActivity[]>([]);
@@ -1799,8 +1743,8 @@ export function StrategistAiCard({
     (state) => state.schedulePatchProposal?.proposal ?? null,
   );
   const surfaceRef = useRef<HTMLElement | null>(null);
-  const scrollContainerRef = useRef<HTMLDivElement | null>(null);
-  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const requestControllerRef = useRef<AbortController | null>(null);
+  const activeTurnIdRef = useRef<string | null>(null);
   const promptInputRef = useRef<HTMLTextAreaElement | null>(null);
   const stagedNodeIdsRef = useRef(stagedNodeIds);
   const calendarRangeRef = useRef(calendarRange);
@@ -1815,7 +1759,6 @@ export function StrategistAiCard({
     action: 'approve' | 'edit' | 'reject';
   }) => Promise<void>) | null>(null);
   const isMountedRef = useRef(true);
-  const [promptMaxHeight, setPromptMaxHeight] = useState(140);
   const [pendingReviewActionId, setPendingReviewActionId] = useState<string | null>(null);
   useEffect(() => {
     const changed = stagedNodeIdsRef.current.join('|') !== stagedNodeIds.join('|');
@@ -1880,34 +1823,6 @@ export function StrategistAiCard({
     });
   }, [categoryById, flatNodes, stagedNodeIds]);
 
-  useEffect(() => {
-    if (!launchRequest || launchRequest.source !== 'custom_schedule') {
-      return;
-    }
-    const frame = window.requestAnimationFrame(() => {
-      promptInputRef.current?.focus();
-      onLaunchHandled(launchRequest.requestId);
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [launchRequest, onLaunchHandled]);
-  const scrollThreadToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
-    const scrollToEnd = () => {
-      const scrollContainer = scrollContainerRef.current;
-      if (scrollContainer) {
-        scrollContainer.scrollTo({
-          top: scrollContainer.scrollHeight,
-          behavior,
-        });
-      }
-      scrollAnchorRef.current?.scrollIntoView({ behavior, block: 'end' });
-    };
-
-    window.requestAnimationFrame(() => {
-      scrollToEnd();
-      window.requestAnimationFrame(scrollToEnd);
-    });
-  }, []);
-
   const latestCompletedTurn = useMemo(
     () =>
       [...turns]
@@ -1917,47 +1832,11 @@ export function StrategistAiCard({
   );
   const promptSuggestions = latestCompletedTurn?.response?.suggestedPrompts ?? [];
   const hasPendingTurn = turns.some((turn) => !turn.response && !turn.error);
-  const latestRunActivity = runActivities.length > 0
-    ? runActivities[runActivities.length - 1]
-    : null;
   const showPromptSuggestions = promptSuggestions.length > 0
     && !latestCompletedTurn?.response?.clarification
     && !isHistoryOpen
     && !isLoading
     && !hasPendingTurn;
-
-  useEffect(() => {
-    scrollThreadToBottom(isLoading || hasPendingTurn ? 'auto' : 'smooth');
-  }, [hasPendingTurn, isLoading, scrollThreadToBottom, turns]);
-
-  useEffect(() => {
-    const surface = surfaceRef.current;
-    if (!surface) {
-      return undefined;
-    }
-
-    const updatePromptMaxHeight = () => {
-      const measuredHeight = surface.getBoundingClientRect().height;
-      setPromptMaxHeight(Math.max(96, Math.floor(measuredHeight * 0.48)));
-    };
-
-    updatePromptMaxHeight();
-    const observer = new ResizeObserver(updatePromptMaxHeight);
-    observer.observe(surface);
-    return () => observer.disconnect();
-  }, []);
-
-  useLayoutEffect(() => {
-    const input = promptInputRef.current;
-    if (!input) {
-      return;
-    }
-
-    input.style.height = 'auto';
-    const nextHeight = Math.min(input.scrollHeight, promptMaxHeight);
-    input.style.height = `${nextHeight}px`;
-    input.style.overflowY = input.scrollHeight > promptMaxHeight ? 'auto' : 'hidden';
-  }, [prompt, promptMaxHeight]);
 
   useEffect(() => {
     const loadHistory = async () => {
@@ -2067,7 +1946,7 @@ export function StrategistAiCard({
     setTurns((current) => {
       const updated = current.map((turn) =>
         turn.id === optimisticTurnId || turn.id === strategistResult.turn.id
-          ? nextTurn
+          ? { ...turn, ...nextTurn }
           : turn,
       );
       return revisedSourceProposalId
@@ -2204,7 +2083,8 @@ export function StrategistAiCard({
       displayPrompt?: string | null;
     },
   ) => {
-    const resolvedPrompt = (nextPrompt ?? prompt).trim();
+    if (requestControllerRef.current) return null;
+    const resolvedPrompt = (nextPrompt ?? '').trim();
     if (!resolvedPrompt && !options?.uiEvent) {
       return null;
     }
@@ -2219,6 +2099,9 @@ export function StrategistAiCard({
     sharedResultGenerationRef.current = resultGuard.generation;
 
     const optimisticTurnId = createTurnId();
+    const controller = new AbortController();
+    requestControllerRef.current = controller;
+    activeTurnIdRef.current = optimisticTurnId;
     setIsLoading(true);
     setActivityLabel('Understanding your request…');
     setRunActivities([]);
@@ -2237,7 +2120,6 @@ export function StrategistAiCard({
         isHistorical: false,
       },
     ]);
-    scrollThreadToBottom('auto');
 
     try {
       const strategistResult = await requestStrategistAdvice({
@@ -2255,6 +2137,23 @@ export function StrategistAiCard({
           return new Date(now.getTime() - offset).toISOString().slice(0, 19);
         })(),
         timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      }, {
+        signal: controller.signal,
+        onUpdate: (result) => {
+          applyStrategistResult(result, optimisticTurnId, resultGuard);
+          activeTurnIdRef.current = result.turn.id;
+        },
+        onProgress: (progress) => {
+          if (!isMountedRef.current || controller.signal.aborted) return;
+          if (progress.kind === 'activity') setActivityLabel(progress.text);
+          else setTurns((current) => current.map((turn) =>
+            turn.id === activeTurnIdRef.current
+              ? { ...turn, ...(progress.kind === 'reasoning'
+                  ? { reasoning: (turn.reasoning ?? '') + progress.text }
+                  : { streamedAnswer: progress.text }) }
+              : turn,
+          ));
+        },
       });
 
       applyStrategistResult(strategistResult, optimisticTurnId, resultGuard);
@@ -2267,11 +2166,13 @@ export function StrategistAiCard({
     } catch (requestError) {
       setTurns((current) =>
         current.map((turn) =>
-          turn.id === optimisticTurnId
+          turn.id === optimisticTurnId || turn.id === activeTurnIdRef.current
             ? {
                 ...turn,
                 error:
-                  requestError instanceof Error
+                  controller.signal.aborted
+                    ? 'Response stopped.'
+                    : requestError instanceof Error
                     ? requestError.message
                     : 'Failed to contact AI workspace.',
               }
@@ -2280,22 +2181,9 @@ export function StrategistAiCard({
       );
       return null;
     } finally {
+      requestControllerRef.current = null;
       setIsLoading(false);
       setActivityLabel('Strategist is thinking…');
-    }
-  };
-
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    await submitPrompt();
-  };
-
-  const handleInputKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      if (!isLoading) {
-        void submitPrompt();
-      }
     }
   };
 
@@ -2332,6 +2220,10 @@ export function StrategistAiCard({
 
   const refreshStrategistWorkspace = async () => {
     try {
+      if (!useWorkspaceStore.getState().legacy) {
+        await refreshWorkspace({ force: true });
+        return useWorkspaceStore.getState().error ? 'The change was saved, but the latest workspace could not be loaded.' : null;
+      }
       if (activeCategory) {
         await fetchNodes(activeCategory.id);
       } else {
@@ -2419,7 +2311,7 @@ export function StrategistAiCard({
           refreshFailed = Boolean(await refreshStrategistWorkspace());
           const currentRange = calendarRangeRef.current;
           if (currentRange) {
-            await fetchCalendarBlocks(currentRange.startAt, currentRange.endAt);
+            await fetchCalendarBlocks(currentRange.startAt, currentRange.endAt, { force: useWorkspaceStore.getState().legacy });
             refreshFailed = refreshFailed || Boolean(useCalendarStore.getState().error);
           }
         } catch {
@@ -2552,7 +2444,7 @@ export function StrategistAiCard({
           notices.push(refreshError);
         }
         if (currentRange) {
-          await fetchCalendarBlocks(currentRange.startAt, currentRange.endAt);
+          await fetchCalendarBlocks(currentRange.startAt, currentRange.endAt, { force: useWorkspaceStore.getState().legacy });
           const calendarError = useCalendarStore.getState().error;
           if (calendarError) {
             notices.push(`Schedule applied, but the calendar refresh failed: ${calendarError}`);
@@ -2766,21 +2658,65 @@ export function StrategistAiCard({
     });
   };
 
+  const runtimeMessages = useMemo<ThreadMessageLike[]>(() => turns.flatMap((turn) => [
+    { id: turn.id + ':user', role: 'user' as const, content: [{ type: 'text' as const, text: turn.prompt }] },
+    {
+      id: turn.id, role: 'assistant' as const,
+      content: [
+        ...(turn.reasoning ? [{ type: 'reasoning' as const, text: turn.reasoning }] : []),
+        { type: 'text' as const, text: turn.response?.summary ?? turn.streamedAnswer ?? turn.error ?? '' },
+      ],
+      status: !turn.response && !turn.error && isLoading
+        ? { type: 'running' as const }
+        : turn.error ? { type: 'incomplete' as const, reason: 'error' as const, error: turn.error }
+        : { type: 'complete' as const, reason: 'stop' as const },
+    },
+  ]), [turns, isLoading]);
+  const chatRuntime = useExternalStoreRuntime({
+    messages: runtimeMessages,
+    convertMessage: (message) => message,
+    isRunning: isLoading,
+    onNew: async (message) => {
+      const text = message.content.filter((part) => part.type === 'text').map((part) => part.text).join('\n');
+      await submitPrompt(text);
+    },
+    onCancel: async () => { requestControllerRef.current?.abort(); },
+    onReload: async (parentId) => {
+      const turn = turns.find((item) => item.id + ':user' === parentId);
+      if (turn) await submitPrompt(turn.prompt);
+    },
+  });
+  const setPrompt = (text: string) => chatRuntime.thread.composer.setText(text);
+  useEffect(() => {
+    if (!launchRequest || !['custom_schedule', 'companion'].includes(launchRequest.source)) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (launchRequest.source === 'companion' && launchRequest.prompt) chatRuntime.thread.composer.setText(launchRequest.prompt);
+      promptInputRef.current?.focus();
+      onLaunchHandled(launchRequest.requestId);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [launchRequest, onLaunchHandled, chatRuntime.thread.composer]);
+  const draftPrompt = (text: string) => {
+    setPrompt(text);
+    promptInputRef.current?.focus();
+  };
+  const visibleSessions = sessions.filter(item => item.title.toLocaleLowerCase().includes(historyQuery.trim().toLocaleLowerCase()));
+
   return (
+    <AssistantRuntimeProvider runtime={chatRuntime}>
+    <ThreadPrimitive.Root asChild>
     <article
       ref={surfaceRef}
       className={`planning-surface planning-ai-surface strategist-surface${isExpanded ? ' is-expanded' : ' is-docked'}${embedded ? ' is-embedded' : ''}`}
     >
       <div className="planning-surface-header strategist-surface-header">
         <div className="strategist-title-block">
-          <h3 className="planning-surface-title strategist-workspace-title">
+          {!embedded && <h3 className="planning-surface-title strategist-workspace-title">
             AI workspace
-          </h3>
-          {activeSession && (
-            <p className="strategist-session-title">
-              {activeSession.title}
-            </p>
-          )}
+          </h3>}
+          <p className="strategist-session-title" title={activeSession?.title ?? 'New conversation'}>
+            {activeSession?.title ?? 'New conversation'}
+          </p>
         </div>
 
         <div className="strategist-header-actions">
@@ -2800,7 +2736,8 @@ export function StrategistAiCard({
             onClick={() => setIsHistoryOpen((value) => !value)}
             aria-label="Chat history"
             title="Chat history"
-            aria-pressed={isHistoryOpen}
+            aria-expanded={isHistoryOpen}
+            aria-controls="strategist-chat-history"
           >
             <HistoryIcon />
           </button>
@@ -2832,28 +2769,28 @@ export function StrategistAiCard({
         </div>
       </div>
 
-      <div ref={scrollContainerRef} className="planning-ai-scroll strategist-scroll">
         {isHistoryOpen && (
-          <section className="strategist-history-panel">
+          <section className="strategist-history-panel" id="strategist-chat-history" aria-label="Saved chats">
             <div className="strategist-history-header">
-              <p className="strategist-followups-label">Saved chats</p>
+              <h4>Saved chats</h4>
+              <button type="button" className="strategist-header-btn" aria-label="Close chat history" onClick={() => setIsHistoryOpen(false)}><X size={16} /></button>
             </div>
+            <label className="chat-history-search"><Search size={16} aria-hidden="true" /><input type="search" aria-label="Search chats" placeholder="Search conversations" value={historyQuery} onChange={event => setHistoryQuery(event.target.value)} /></label>
             <div className="strategist-history-list">
-              {sessions.length === 0 ? (
+              {visibleSessions.length === 0 ? (
                 <div className="strategist-feedback strategist-feedback-pending">
-                  No saved chats yet.
+                  {historyQuery ? 'No conversations match your search.' : 'Your conversations will appear here.'}
                 </div>
               ) : (
-                sessions.map((sessionItem) => (
+                visibleSessions.map((sessionItem) => (
                   <button
                     key={sessionItem.id}
                     type="button"
                     className={`strategist-history-item${activeSession?.id === sessionItem.id ? ' is-active' : ''}`}
                     onClick={() => void loadSession(sessionItem.id)}
-                    disabled={isLoadingHistory}
+                    disabled={isLoadingHistory || isLoading}
                   >
                     <strong>{sessionItem.title}</strong>
-                    <span>{sessionItem.providerLabel}</span>
                     <span>{formatSessionTime(sessionItem.updatedAt)}</span>
                   </button>
                 ))
@@ -2862,6 +2799,7 @@ export function StrategistAiCard({
           </section>
         )}
 
+      <ThreadPrimitive.Viewport className="planning-ai-scroll strategist-scroll">
         {historyError && (
           <div className="strategist-feedback strategist-feedback-error" role="alert">
             {formatWorkspaceCopy(historyError)}
@@ -2876,12 +2814,31 @@ export function StrategistAiCard({
           <div className="strategist-empty-state">
             <div className="strategist-empty-brand">
               <img src={drasilLogoUrl} alt="" className="strategist-empty-logo" />
-              <p className="strategist-empty-title">What's on your mind today?</p>
+              <h3 className="strategist-empty-title">A little clarity for your day.</h3>
+            </div>
+            <p className="strategist-empty-copy">Think it through, make a plan, or find time for what matters.</p>
+            <div className="chat-starters" aria-label="Start a conversation">
+              {[
+                ['Plan my day', 'Help me make a realistic plan for today.'],
+                ['Find my next step', 'Review my tasks and help me decide what to focus on next.'],
+                ['Make time to focus', 'Help me find time for focused work this week.'],
+              ].map(([label, prompt]) => <button type="button" key={label} onClick={() => draftPrompt(prompt)}>{label}<ArrowUp size={16} aria-hidden="true" /></button>)}
             </div>
           </div>
         ) : (
-          <section className="strategist-response-stack" aria-live="polite">
-            {turns.map((turn) => {
+          <section className="strategist-response-stack" aria-label="Conversation">
+            <ThreadPrimitive.Messages>{({ message }) => {
+              if (message.role === 'user') return (
+                <MessagePrimitive.Root className="chat-user-message">
+                  <div className="strategist-turn strategist-turn-user"><MessagePrimitive.Parts /></div>
+                  <ActionBarPrimitive.Root className="strategist-message-actions chat-user-actions">
+                    <ActionBarPrimitive.Copy className="strategist-header-btn chat-copy" aria-label="Copy message" title="Copy message"><Copy size={15} className="chat-copy-default" /><Check size={15} className="chat-copy-done" /><span className="chat-copy-done" role="status">Copied</span></ActionBarPrimitive.Copy>
+                    <button type="button" className="strategist-header-btn" aria-label="Reuse message" title="Reuse message in composer" disabled={isLoading} onClick={() => draftPrompt(message.content.filter(part => part.type === 'text').map(part => part.text).join('\n'))}><Pencil size={15} /></button>
+                  </ActionBarPrimitive.Root>
+                </MessagePrimitive.Root>
+              );
+              const turn = turns.find((item) => item.id === message.id);
+              if (!turn) return null;
               const taskReferences = taskReferencesByTurnId.get(turn.id) ?? [];
               const taskReferenceById = new Map(
                 taskReferences.map((reference) => [reference.node.id, reference]),
@@ -2928,14 +2885,24 @@ export function StrategistAiCard({
                   ? standardProposal.payload.approval_blocked_reason
                   : null;
               return (
-                <div key={turn.id} className="strategist-chat-group">
-                  <div className="strategist-turn strategist-turn-user">
-                    <p>{turn.prompt}</p>
-                  </div>
+                <MessagePrimitive.Root key={turn.id} className="strategist-chat-group">
+                  <ChatProgress reasoning={turn.reasoning} running={!turn.response && !turn.error && isLoading} activity={activityLabel} />
+                  {!turn.response && turn.streamedAnswer && (
+                    <div className="strategist-turn strategist-turn-assistant">
+                      <ChatMarkdown text={turn.streamedAnswer} taskReferences={taskReferences} />
+                    </div>
+                  )}
 
                   {turn.error ? (
                     <div className="strategist-feedback strategist-feedback-error" role="alert">
-                      {formatWorkspaceCopy(turn.error)}
+                      <strong>{turn.error === 'Response stopped.' ? 'Response stopped' : 'Could not complete this message'}</strong>
+                      <p>{formatWorkspaceCopy(turn.error)}</p>
+                      <ActionBarPrimitive.Root className="chat-error-actions">
+                        {/connect|sign.in|login|provider|API key/i.test(turn.error) && <button type="button" className="strategist-header-btn" onClick={() => useUiStore.getState().openSettings('connections')}>Open connections</button>}
+                        <ActionBarPrimitive.Reload className="strategist-header-btn" aria-label="Retry message" title="Retry message">
+                          <RotateCcw size={14} /> Retry
+                        </ActionBarPrimitive.Reload>
+                      </ActionBarPrimitive.Root>
                     </div>
                   ) : turn.response ? (
                     <>
@@ -3484,7 +3451,7 @@ export function StrategistAiCard({
                                 >
                                   {isThought ? (
                                     <details className="strategist-live-step">
-                                      <summary>Thought</summary>
+                                      <summary>{activity.label}</summary>
                                       <p>{activity.label}</p>
                                     </details>
                                   ) : (
@@ -3496,21 +3463,16 @@ export function StrategistAiCard({
                           </ol>
                         </details>
                       )}
-                      <div
-                        className="strategist-feedback strategist-feedback-pending"
-                        role="status"
-                        aria-label="AI workspace is thinking"
-                      >
-                        <div className="strategist-activity-line" aria-label="AI workspace is working">
-                          <span className="strategist-activity-pulse" aria-hidden="true" />
-                          <span>{latestRunActivity?.label ?? activityLabel}</span>
-                        </div>
-                      </div>
                     </div>
                   )}
-                </div>
+                  {(turn.response || turn.streamedAnswer) && (
+                    <ActionBarPrimitive.Root className="strategist-message-actions">
+                      <ActionBarPrimitive.Copy className="strategist-header-btn chat-copy" aria-label="Copy response" title="Copy response"><Copy size={15} className="chat-copy-default" /><Check size={15} className="chat-copy-done" /><span className="chat-copy-done" role="status">Copied</span></ActionBarPrimitive.Copy>
+                    </ActionBarPrimitive.Root>
+                  )}
+                </MessagePrimitive.Root>
               );
-            })}
+            }}</ThreadPrimitive.Messages>
           </section>
         )}
         {showPromptSuggestions && (
@@ -3534,13 +3496,13 @@ export function StrategistAiCard({
             </div>
           </div>
         )}
-        <div ref={scrollAnchorRef} />
-      </div>
+        <ThreadPrimitive.ScrollToBottom className="strategist-scroll-bottom" aria-label="Scroll to latest message"><ArrowDown size={16} /></ThreadPrimitive.ScrollToBottom>
+      </ThreadPrimitive.Viewport>
 
       <div className="strategist-composer">
         {attachedTasks.length > 0 && (
           <div className="strategist-working-set" aria-label="Attached selected tasks">
-            <span className="strategist-working-set-label">Working set</span>
+            <span className="strategist-working-set-label">Selected tasks</span>
             <div className="strategist-working-set-chips">
               {attachedTasks.map(({ node, category }) => (
                 <span
@@ -3556,30 +3518,30 @@ export function StrategistAiCard({
             </div>
           </div>
         )}
-        <form className="strategist-input-form" onSubmit={handleSubmit}>
-          <label className="strategist-input-shell">
-            <textarea
+        <ComposerPrimitive.Root className="strategist-input-form">
+          <div className="strategist-input-shell">
+            <ComposerPrimitive.Input
               ref={promptInputRef}
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              onKeyDown={handleInputKeyDown}
-              placeholder="Ask the AI workspace to review, schedule, or clean up your plan..."
+              placeholder="Ask Drasil to plan, review, or schedule…"
               aria-label="AI workspace prompt"
-              rows={1}
-              style={{ maxHeight: `${promptMaxHeight}px` }}
+              minRows={1}
+              maxRows={8}
+              unstable_insertNewlineOnTouchEnter
             />
-            <button
-              type="submit"
-              className="strategist-submit-btn"
-              disabled={isLoading}
-              aria-label={isLoading ? 'AI workspace is thinking' : 'Send message'}
-              title={isLoading ? 'Thinking' : 'Send message'}
-            >
-              <SendIcon />
-            </button>
-          </label>
-        </form>
+            {isLoading ? (
+              <ComposerPrimitive.Cancel className="strategist-submit-btn" aria-label="Stop response" title="Stop response">
+                <Square size={16} />
+              </ComposerPrimitive.Cancel>
+            ) : (
+              <ComposerPrimitive.Send className="strategist-submit-btn" aria-label="Send message" title="Send message">
+                <ArrowUp size={18} />
+              </ComposerPrimitive.Send>
+            )}
+          </div>
+        </ComposerPrimitive.Root>
       </div>
     </article>
+    </ThreadPrimitive.Root>
+    </AssistantRuntimeProvider>
   );
 }

@@ -23,6 +23,8 @@ backend/.venv
 backend/app/evals
 backend/app/private_extensions.py
 backend/tests
+desktop/node_modules
+desktop/out
 frontend/.env
 frontend/dist
 frontend/node_modules

@@ -53,33 +53,43 @@
      Each category has: main accent + a soft tint for backgrounds.
      ---------------------------------------------------------- */
 
+  --color-calendar-ink: #25241f;
+  --color-calendar-paper: #f5f1e9;
+
   /* Work */
-  --color-cat-work:         #6366f1;   /* Indigo      */
-  --color-cat-work-tint:    #eef2ff;
+  --color-cat-work: #80602f;   /* Indigo      */
+  --color-cat-work-tint: #e4d2ad;
+  --color-cat-work-fill: #e4d2ad;
 
   /* Health */
-  --color-cat-health:       #10b981;   /* Emerald     */
-  --color-cat-health-tint:  #ecfdf5;
+  --color-cat-health: #4f6a50;   /* Emerald     */
+  --color-cat-health-tint: #cedbc6;
+  --color-cat-health-fill: #cedbc6;
 
   /* Home / Chores */
-  --color-cat-home:         #f59e0b;   /* Amber       */
-  --color-cat-home-tint:    #fffbeb;
+  --color-cat-home: #885d48;   /* Amber       */
+  --color-cat-home-tint: #e6d2c5;
+  --color-cat-home-fill: #e6d2c5;
 
   /* Finance */
-  --color-cat-finance:      #0ea5e9;   /* Sky blue    */
-  --color-cat-finance-tint: #f0f9ff;
+  --color-cat-finance: #536973;   /* Sky blue    */
+  --color-cat-finance-tint: #cfdee2;
+  --color-cat-finance-fill: #cfdee2;
 
   /* Social */
-  --color-cat-social:       #ec4899;   /* Pink        */
-  --color-cat-social-tint:  #fdf2f8;
+  --color-cat-social: #885f69;   /* Pink        */
+  --color-cat-social-tint: #e8d1d7;
+  --color-cat-social-fill: #e8d1d7;
 
   /* Personal Growth */
-  --color-cat-growth:       #8b5cf6;   /* Violet      */
-  --color-cat-growth-tint:  #f5f3ff;
+  --color-cat-growth: #6c6280;   /* Violet      */
+  --color-cat-growth-tint: #dcd5e7;
+  --color-cat-growth-fill: #dcd5e7;
 
   /* Leisure */
-  --color-cat-leisure:      #14b8a6;   /* Teal        */
-  --color-cat-leisure-tint: #f0fdfa;
+  --color-cat-leisure: #4f7069;   /* Teal        */
+  --color-cat-leisure-tint: #cde2d9;
+  --color-cat-leisure-fill: #cde2d9;
 
   /* ----------------------------------------------------------
      3. SEMANTIC / STATE COLORS (Compassionate UI)
@@ -92,6 +102,8 @@
   --color-state-warning-tint: #fffbeb;
   --color-state-info:         #6366f1;  /* AI proposals, in-progress     */
   --color-state-info-tint:    #eef2ff;
+  --color-action-primary:    #4f46e5;
+  --color-action-primary-hover: #4338ca;
   --color-state-rollover:     #94a3b8;  /* Missed/past-due — NEVER red   */
   --color-state-rollover-tint: #f8fafc;
   /* Protected habit / blocked — translucent stripe pattern via CSS */

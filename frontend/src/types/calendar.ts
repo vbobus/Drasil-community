@@ -22,6 +22,7 @@ export interface CalendarBlock {
   taskId: string;
   taskStatus?: CalendarCompletionStatus | 'todo' | 'in-progress' | 'done';
   taskDeadlineAt?: string | null;
+  taskPlannedDate?: string | null;
   taskPriority?: 'low' | 'medium' | 'high';
   timeEstimateMinutes?: number | null;
   categoryId: number;
@@ -49,6 +50,7 @@ export interface ApiCalendarBlock {
   taskId: number;
   taskStatus?: CalendarCompletionStatus | 'todo' | 'in-progress' | 'done';
   taskDeadlineAt?: string | null;
+  taskPlannedDate?: string | null;
   taskPriority?: 'low' | 'medium' | 'high';
   timeEstimateMinutes?: number | null;
   categoryId: number;

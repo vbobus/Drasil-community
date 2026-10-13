@@ -47,6 +47,7 @@ from app.services.agent_kernel.recurrence_materialization import (
     DEFAULT_RECURRENCE_MATERIALIZATION_OCCURRENCES,
     recurrence_occurrence_dates,
 )
+from app.services.calendar_assignment import moved_planned_day
 from app.services.task_lifecycle import allocate_strategy_node_id
 
 
@@ -292,6 +293,7 @@ class NativeDomainMutationExecutor:
             "priority": row.priority,
             "category_id": row.category_id,
             "parent_id": row.parent_id,
+            "planned_date": row.planned_date,
             "deadline_at": row.deadline_at,
             "time_estimate_minutes": row.time_estimate_minutes,
             "is_backlog": row.is_backlog,
@@ -336,6 +338,7 @@ class NativeDomainMutationExecutor:
             status=_status(fields.status) or "todo",
             priority=fields.priority or "medium",
             parent_id=parent_id,
+            planned_date=fields.planned_date.isoformat() if fields.planned_date else None,
             deadline_at=serialize_deadline_date(fields.deadline_at),
             time_estimate_minutes=fields.estimate_minutes,
             tags=(
@@ -367,6 +370,8 @@ class NativeDomainMutationExecutor:
             row.status = _status(updates.status) or row.status
         if updates.estimate_minutes is not None:
             row.time_estimate_minutes = updates.estimate_minutes
+        if updates.planned_date is not None:
+            row.planned_date = updates.planned_date.isoformat()
         if updates.deadline_at is not None:
             row.deadline_at = serialize_deadline_date(updates.deadline_at)
         if updates.tags is not None:
@@ -684,8 +689,25 @@ class NativeDomainMutationExecutor:
         resolved = self._resolve(ref)
         return self._claim(CalendarBlock, _numeric_id(resolved.entity_id, "calendar_block"), ref)
 
+    def _move_booking_assignment(self, operation: Any, row: CalendarBlock, start_at: datetime) -> None:
+        task = self.session.get(StrategyNode, row.task_id)
+        if task is None:
+            raise DomainMutationError("calendar block task does not exist")
+        target_day = moved_planned_day(task.planned_date, row.start_at, start_at)
+        if target_day is None:
+            return
+        task = self._claim_implied(
+            StrategyNode, task, kind="task", entity_id=f"task:{task.id}"
+        )
+        task.planned_date = target_day.isoformat()
+        self.session.add(task)
+        self.session.flush()
+        ref = EntityRef(kind="task", entity_id=f"task:{task.id}", revision=task.revision)
+        self._fact(operation.operation_id, ref, values=self._task_values(task))
+
     def _apply_calendar_move_block(self, operation: Any, _change_set: ChangeSet) -> None:
         row = self._calendar_row(operation.block_ref)
+        self._move_booking_assignment(operation, row, operation.start_at)
         row.start_at, row.end_at = _naive(operation.start_at), _naive(operation.end_at)
         self.session.add(row)
         self.session.flush()
@@ -696,6 +718,7 @@ class NativeDomainMutationExecutor:
     def _apply_calendar_resize_block(self, operation: Any, _change_set: ChangeSet) -> None:
         row = self._calendar_row(operation.block_ref)
         if operation.start_at is not None:
+            self._move_booking_assignment(operation, row, operation.start_at)
             row.start_at = _naive(operation.start_at)
         row.end_at = _naive(operation.end_at)
         if row.end_at <= row.start_at:

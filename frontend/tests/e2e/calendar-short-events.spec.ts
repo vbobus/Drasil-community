@@ -88,6 +88,7 @@ test.describe('Short calendar event rendering', () => {
     await boot;
 
     const calendar = page.getByRole('region', { name: /shared calendar/i });
+    await calendar.getByLabel('Calendar detail', { exact: true }).click();
     await calendar.getByLabel('Zoom / Detail').fill('1');
 
     const fiveMinute = calendar.locator('[data-calendar-block-id="9601"]');
@@ -134,4 +135,11 @@ test.describe('Short calendar event rendering', () => {
     expect(thirtyMetrics.height).toBeGreaterThan(fifteenMetrics.height);
     expect(fiveMetrics.x).not.toBe(fifteenMetrics.x);
   });
+});
+
+// Calendar fixtures run without an authenticated live backend.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/v1/accounts/status', route => route.fulfill({ json: {
+    authenticationRequired: false, needsBootstrap: false, supportsRemoteBackend: false,
+  } }));
 });

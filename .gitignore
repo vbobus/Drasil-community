@@ -33,18 +33,25 @@ backend/data/
 *.sqlite3-journal
 *.duckdb.wal
 
-# Frontend and generated test output
+# Frontend, desktop, and generated test output
 frontend/node_modules/
 frontend/dist/
 frontend/playwright-report/
 frontend/test-results/
 frontend/blob-report/
+desktop/node_modules/
+desktop/out/
 test-results/
 
 # Local tooling
 .agent/
 .agents/
 .codex/
+.vercel/
+.impeccable/
+public/
+**/auth.json
+**/credentials.json
 .eval-artifacts/
 .tmp/
 _bmad/

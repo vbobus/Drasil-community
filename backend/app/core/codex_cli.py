@@ -109,6 +109,9 @@ def find_codex_cli_path() -> Path | None:
 
 
 def require_codex_cli_path(context: str) -> str:
+    from app.services.codex_sandbox import enabled
+    if enabled():
+        return "codex-sandbox"
     codex_path = find_codex_cli_path()
     if codex_path is None:
         raise HTTPException(

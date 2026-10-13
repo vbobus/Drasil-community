@@ -291,7 +291,8 @@ test.describe('Story 8.7 - generic ReviewDocument and typed interactions', () =>
       await expect(renderedChanges.nth(index)).toContainText(summary);
     }
     await expect(page.getByText(/task\.create|task\.update|task\.move|task\.archive|task\.delete|TaskPatch/)).toHaveCount(0);
-    await expect(page.getByRole('button', { name: 'Approve and apply' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Apply changes' })).toBeVisible();
+    await page.screenshot({ path: '../.impeccable/review/workspace-approval-dark.png', animations: 'disabled' });
   });
 
   test('renders local schedule time separately from its labeled time zone', async ({
@@ -639,11 +640,12 @@ test.describe('Story 8.7 - generic ReviewDocument and typed interactions', () =>
     await page.getByLabel('AI workspace prompt').fill('Review my interview plan');
     await page.getByRole('button', { name: /send message/i }).click();
 
+    await page.getByText('Included tasks', { exact: true }).click();
     for (const heading of ['Affected items', 'What will change', 'Before and after', 'Schedule', 'Repeating schedule', 'Conflict resolution', 'Assumptions', 'What to know', 'Plan changes', 'Current status']) {
       await expect(page.getByRole('heading', { name: heading, exact: true })).toBeVisible();
     }
-    await expect(page.getByText('Prepare interview', { exact: true }).first()).toBeVisible();
-    await expect(page.locator('[data-task-id="7401"]').first()).toBeVisible();
+    await expect(page.locator('.floating-chat').getByText('Prepare interview', { exact: true }).first()).toBeVisible();
+    await expect(page.locator('.floating-chat [data-task-id="7401"]').first()).toBeVisible();
     await expect(page.getByText('This is the durable result of the original request.')).toBeVisible();
     await expect(page.getByText('Inspect the local changes before continuing.')).toBeVisible();
     await expect(page.getByText('Time zone: America/Vancouver')).toHaveCount(2);
@@ -680,7 +682,7 @@ test.describe('Story 8.7 - generic ReviewDocument and typed interactions', () =>
       });
     });
 
-    const approveButton = page.getByRole('button', { name: 'Approve and apply' });
+    const approveButton = page.getByRole('button', { name: 'Apply changes' });
     await approveButton.focus();
     await expect(approveButton).toBeFocused();
     expect((await approveButton.boundingBox())?.height).toBeGreaterThanOrEqual(40);
@@ -718,7 +720,7 @@ test.describe('Story 8.7 - generic ReviewDocument and typed interactions', () =>
     await mockStrategistApi({
       runResponses: actions.map((item, index) => runResponse(documentWith([item], { decision: item.action === 'decision' }), index + 1)),
     });
-    const labels = ['Edit request', 'Reject', 'Which time should be used?: Tuesday morning', 'Retry', 'Approve and apply'];
+    const labels = ['Revise', 'Reject', 'Which time should be used?: Tuesday morning', 'Retry', 'Apply changes'];
     const statuses: Array<NonNullable<StrategistReviewActionOutcome['result']>['status']> = ['edit_requested', 'rejected', 'decision_recorded', 'retry_replayed'];
     const outcomes: StrategistReviewActionOutcome[] = statuses.map((status, index) => ({
       status: 'ok',
@@ -831,9 +833,9 @@ test.describe('Story 8.7 - generic ReviewDocument and typed interactions', () =>
         }),
       });
     });
-    await page.getByRole('button', { name: 'Approve and apply' }).click();
+    await page.getByRole('button', { name: 'Apply changes' }).click();
     await expect(page.getByRole('alert')).toContainText('The local plan changed before it could be applied.');
-    await expect(page.getByRole('button', { name: 'Approve and apply' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Apply changes' })).toBeEnabled();
 
     await page.unroute('**/api/v1/ai/strategist/sessions/session-review/review-actions');
     await page.route('**/api/v1/ai/strategist/sessions/session-review/review-actions', async (route) => {
@@ -843,7 +845,7 @@ test.describe('Story 8.7 - generic ReviewDocument and typed interactions', () =>
         body: JSON.stringify({ detail: 'internal_validator_field_name' }),
       });
     });
-    await page.getByRole('button', { name: 'Approve and apply' }).click();
+    await page.getByRole('button', { name: 'Apply changes' }).click();
     await expect(page.getByRole('alert')).toContainText('Drasil could not complete this review action safely.');
     await expect(page.getByText('internal_validator_field_name')).toHaveCount(0);
   });

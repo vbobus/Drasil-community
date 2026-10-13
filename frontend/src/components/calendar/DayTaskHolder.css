@@ -1,0 +1,25 @@
+.day-task-holder { position: relative; min-width: 0; padding: 0 6px 8px; text-align: left; }
+.day-task-holder-heading { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 30px; }
+.day-task-holder-heading > span { color: var(--color-text-secondary); font-size: .6875rem; font-weight: 500; white-space: nowrap; }
+.day-task-holder-heading > button { display: grid; place-items: center; min-width: 28px; min-height: 28px; color: var(--color-text-secondary); border-radius: 4px; }
+.day-task-holder-heading > button:hover { background: var(--color-bg-overlay); }
+.day-task-holder-list { display: grid; gap: 4px; }
+.day-task-chip { display: flex; align-items: center; gap: 6px; min-width: 0; min-height: 30px; padding: 4px 7px; border-radius: 5px; background: var(--day-task-fill); color: var(--color-calendar-ink); cursor: grab; }
+.day-task-check { display: grid; place-items: center; flex-shrink: 0; width: 18px; height: 18px; border: 1px solid currentColor; border-radius: 50%; color: inherit; }
+.day-task-check svg { visibility: hidden; }
+.day-task-check:hover svg, .day-task-check:focus-visible svg { visibility: visible; }
+.day-task-title { overflow: hidden; min-width: 0; flex: 1; white-space: nowrap; text-overflow: ellipsis; text-align: left; font-size: .8125rem; font-weight: 550; color: inherit; }
+.day-task-estimate { flex-shrink: 0; font-size: .6875rem; font-variant-numeric: tabular-nums; }
+.day-task-empty { padding: 4px 0 8px; color: var(--color-text-secondary); font-size: .75rem; }
+.day-task-expand { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; min-height: 30px; margin-top: 4px; color: var(--color-text-secondary); font-size: .75rem; }
+.day-task-holder.is-expanded { z-index: 30; }
+.day-task-holder.is-expanded .day-task-holder-body { position: absolute; left: 0; right: 0; top: 30px; padding: 0 6px 8px; background: var(--color-bg-elevated); border-radius: 0 0 8px 8px; box-shadow: var(--shadow-popover); }
+.day-task-holder.is-expanded .day-task-holder-list { max-height: min(50vh, 380px); overflow: auto; scrollbar-width: thin; }
+.day-task-holder.is-expanded .day-task-title { white-space: normal; overflow-wrap: anywhere; }
+.day-task-holder :focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+@media (pointer: coarse) { .day-task-chip { min-height: 42px; } .day-task-holder-heading > button, .day-task-expand { min-height: 40px; } }
+
+.day-task-holder { border: 1px solid transparent; border-radius: 8px; min-height: 64px; }
+.app-pointer-dragging .day-task-holder { border-color: var(--color-border-strong); border-style: dashed; }
+.day-task-holder.is-drop-target { border-color: var(--color-cat-work); background: color-mix(in srgb, var(--color-cat-work) 12%, var(--color-bg-surface)); }
+.day-task-check:hover, .day-task-check:focus-visible { color: white; background: #23865a; border-color: #23865a; }

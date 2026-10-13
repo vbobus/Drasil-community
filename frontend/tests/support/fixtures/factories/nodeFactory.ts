@@ -31,6 +31,7 @@ export class NodeFactory {
       nodeType: overrides.nodeType ?? 'task',
       categoryId: overrides.categoryId,
       parentId: overrides.parentId ?? null,
+      plannedDate: overrides.plannedDate ?? null,
       deadlineAt: overrides.deadlineAt ?? null,
       timeEstimateMinutes: overrides.timeEstimateMinutes ?? null,
       emoji: overrides.emoji ?? faker.helpers.arrayElement(EMOJIS),

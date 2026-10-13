@@ -92,6 +92,8 @@ def _apply_update_without_commit(
         node.status = body.status
     if body.priority is not None:
         node.priority = body.priority
+    if "planned_date" in body.model_fields_set:
+        node.planned_date = body.planned_date
     if "deadline_at" in body.model_fields_set:
         node.deadline_at = body.deadline_at
     if "time_estimate_minutes" in body.model_fields_set:
@@ -203,6 +205,7 @@ def _create_node_without_commit(
         category_id=body.category_id,
         node_type="habit" if body.node_type == "habit" else "task",
         parent_id=body.parent_id,
+        planned_date=body.planned_date,
         deadline_at=body.deadline_at,
         time_estimate_minutes=body.time_estimate_minutes,
         emoji=body.emoji,

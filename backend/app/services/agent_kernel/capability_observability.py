@@ -6,6 +6,8 @@ import logging
 from dataclasses import asdict, dataclass
 from typing import Any, Literal
 
+from app.services.agent_kernel.agent_observability import record_agent_event
+
 
 logger = logging.getLogger("drasil.agent_capabilities")
 rollout_logger = logging.getLogger("drasil.agent_kernel_rollout")
@@ -66,6 +68,10 @@ class RolloutObservation:
 def emit_rollout_observation(observation: RolloutObservation) -> dict[str, Any]:
     payload = observation.to_payload()
     rollout_logger.info("agent kernel rollout observation", extra={"rollout_observation": payload})
+    record_agent_event(
+        f"rollout.{observation.event}",
+        {key: value for key, value in payload.items() if value is not None},
+    )
     return payload
 
 
@@ -126,5 +132,17 @@ def emit_capability_observations(
             "error": loaded.get("error"),
         }
         logger.info("agent capability observation", extra={"capability_observation": event})
+        record_agent_event(
+            "capability.load",
+            {
+                "agentId": event["agent_id"],
+                "capabilityId": event["capability_id"],
+                "capabilityVersion": event["capability_version"],
+                "evidenceSatisfied": event["evidence_satisfied"],
+                "unmetRequirementCount": len(event["unmet_evidence_requirements"]),
+                "loadDurationMs": int(event["load_duration_ms"] or 0),
+                "failed": event["failed"],
+            },
+        )
         events.append(event)
     return events

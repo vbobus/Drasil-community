@@ -70,6 +70,7 @@ from app.services.handoff_outcomes import (
 from app.services.request_scheduling_constraints import (
     apply_request_constraints,
     constraint_occupied_intervals,
+    constraint_safe_slot_minutes,
     normalize_request_constraints,
     validate_operations_against_request_constraints,
 )
@@ -1869,6 +1870,7 @@ def build_created_task_schedule_plan(
     if isinstance(slot_minutes, bool) or not isinstance(slot_minutes, int):
         slot_minutes = 5
     slot_minutes = max(1, min(60, slot_minutes))
+    slot_minutes = constraint_safe_slot_minutes(slot_minutes, spec.get("request_constraints"))
     window_start = _ceil_to_slot_boundary(window_start, slot_minutes)
     if window_end <= window_start:
         return {"status": "invalid", "errors": ["The scheduling window must end after it starts."]}
@@ -2994,6 +2996,7 @@ def build_planner_schedule_proposal(
             runtime_settings=runtime_settings,
             provider_readiness=provider_readiness,
         )
+    slot_minutes = constraint_safe_slot_minutes(slot_minutes, request_constraints)
     normalized_window_start = _ceil_to_slot_boundary(
         local_wall_time(window_start),
         slot_minutes,

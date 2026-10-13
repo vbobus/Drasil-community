@@ -160,6 +160,10 @@ from app.services.agent_kernel.evidence_contract import assess_tool_evidence
 from app.services.agent_kernel.capability_observability import (
     emit_capability_observations,
 )
+from app.services.agent_kernel.agent_observability import (
+    observe_agent_tool,
+    observe_agent_turn,
+)
 from app.services.agent_kernel.capabilities import compact_capability_catalog, load_skill
 from app.services.agent_kernel.calendar_service import (
     CalendarReadInvocation,
@@ -1008,6 +1012,7 @@ def _compact_metadata_tool_schema(
     value_schemas: dict[str, dict[str, Any]] = {
         "title": {"type": "string"},
         "notes": {"type": "string"},
+        "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
         "deadline_at": {"type": "string"},
         "priority": {"type": "string"},
         "status": {"type": "string"},
@@ -1078,6 +1083,7 @@ def _compact_new_workflow_tool_schema(
         "category_id": {"type": ["integer", "null"]},
         "category_name": {"type": ["string", "null"]},
         "notes": {"type": ["string", "null"]},
+        "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
         "deadline_at": {"type": ["string", "null"]},
         "priority": {"type": ["string", "null"]},
         "status": {"type": ["string", "null"]},
@@ -1239,6 +1245,7 @@ def _compact_task_tree_provider_schema(tool: dict[str, Any]) -> dict[str, Any]:
     metadata_properties = {
         "title": nullable_text,
         "notes": nullable_text,
+        "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
         "deadline_at": nullable_text,
         "priority": nullable_text,
         "status": nullable_text,
@@ -2510,6 +2517,7 @@ def _compact_prefetch_task(item: Any) -> dict[str, Any] | None:
         "status",
         "priority",
         "priority_label",
+        "planned_date",
         "deadline_at",
         "deadline",
         "time_estimate_minutes",
@@ -7662,6 +7670,7 @@ def _snapshot_node(node: StrategyNode) -> StrategyNode:
         priority=node.priority,
         node_type=node.node_type,
         parent_id=node.parent_id,
+        planned_date=node.planned_date,
         deadline_at=node.deadline_at,
         time_estimate_minutes=node.time_estimate_minutes,
         emoji=node.emoji,
@@ -8253,6 +8262,7 @@ def _create_task_metadata_updates_from_action_contract(
             updates["time_estimate_minutes"] = int(estimate)
 
     allowed_create_fields = {
+        "planned_date",
         "deadline_at",
         "priority",
         "status",
@@ -8285,6 +8295,7 @@ def _metadata_updates_from_proposal_contract(
         if isinstance(action_updates, dict):
             raw_updates.update(action_updates)
         for key in (
+            "planned_date",
             "deadline_at",
             "deadlineAt",
             "due_date",
@@ -8333,6 +8344,7 @@ def _metadata_updates_from_proposal_contract(
         "notes",
         "status",
         "priority",
+        "planned_date",
         "deadline_at",
         "time_estimate_minutes",
         "tags",
@@ -10460,6 +10472,7 @@ def _apply_change_set_tool_simulate(
     return result.model_dump(mode="json", by_alias=True)
 
 
+@observe_agent_turn
 def run_agent_kernel_turn(
     *,
     session: Session,
@@ -11766,6 +11779,7 @@ def run_agent_kernel_turn(
         repaired["repaired_tool"] = "handoff_to_planner"
         return repaired
 
+    @observe_agent_tool
     def kernel_tool_executor(name: str, arguments: dict[str, Any], **kwargs: Any) -> dict[str, Any]:
         nonlocal executed_kernel_tool_calls, goal_transition_recorded, sequence
         count_against_foreground_budget = bool(
@@ -12577,6 +12591,21 @@ def run_agent_kernel_turn(
     else:
         model_loop_started_at = perf_counter()
         provider_readiness = provider_transport_readiness(runtime_settings)
+        # A missing connection is not a stalled model turn. Keep this outside
+        # inference recovery so the run persists as a failure, with no invented
+        # answer or completion trace.
+        if provider_readiness.get("passed") is False:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "ChatGPT is not connected. Open Connections in Settings, finish sign-in, "
+                    "then retry this message. If OpenAI asks, enable device-code sign-in "
+                    "in ChatGPT Settings → Security first."
+                    if runtime_settings.get("provider") == "codex-cli"
+                    else "The OpenAI API connection is not ready. Open Connections in Settings "
+                    "to configure it, or connect your ChatGPT subscription."
+                ),
+            )
         configured_reasoning_effort = runtime_settings.get("reasoning_effort")
         effective_reasoning_effort = _initial_model_reasoning_effort(
             configured_reasoning_effort
@@ -12765,14 +12794,6 @@ def run_agent_kernel_turn(
                 ),
             )
         try:
-            if provider_readiness.get("passed") is False:
-                raise HTTPException(
-                    status_code=409,
-                    detail=(
-                        "Strategist provider is not ready. Check ChatGPT/Codex "
-                        "login or BYOK provider settings before running a model-backed turn."
-                    ),
-                )
             if route_decision.route_kind == "external_world_planning":
                 direct_request = (
                     f"{display_prompt}\n\n"
@@ -12886,6 +12907,10 @@ def run_agent_kernel_turn(
                 )
         except HTTPException as error:
             rescue_succeeded = False
+            if error.status_code in {401, 403, 409, 429, 503} and not tool_trace:
+                # Authentication, account contention, and service limits need
+                # recovery by the user, not another model continuation.
+                raise
             rescue_error: HTTPException | None = None
             remaining_model_calls = max(
                 0,

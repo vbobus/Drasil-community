@@ -1,0 +1,27 @@
+.companion-settings { display: grid; gap: 24px; max-width: 720px; color: var(--color-text-primary); }
+.companion-settings h4 { font-size: 20px; margin-bottom: 8px; }
+.companion-settings p, .companion-settings small, .companion-connection span { color: var(--color-text-secondary); line-height: 1.6; }
+.companion-settings label { display: grid; gap: 8px; font-weight: 500; }
+.companion-settings .companion-toggle { display: flex; align-items: center; gap: 10px; }
+.companion-settings input:not([type=checkbox]), .companion-settings textarea, .companion-composer textarea { width: 100%; min-width: 0; padding: 12px; background: var(--color-bg-elevated); color: var(--color-text-primary); border: 1px solid var(--color-border-strong); border-radius: 10px; font: inherit; line-height: 1.5; }
+.companion-settings textarea, .companion-composer textarea { resize: vertical; }
+.companion-composer textarea::placeholder, .companion-settings input::placeholder, .companion-settings textarea::placeholder { color: var(--color-text-secondary); opacity: 1; }
+.companion-settings input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--color-text-primary); }
+.companion-connection { display: grid; gap: 6px; border-block: 1px solid var(--color-border-subtle); padding-block: 16px; }
+.companion-fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 20px; align-items: start; }
+.companion-composer .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.companion-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.companion-settings button, .companion-panel button { min-height: 40px; padding: 8px 14px; border: 1px solid var(--color-border-strong); border-radius: 10px; background: var(--color-bg-elevated); color: var(--color-text-primary); font: inherit; cursor: pointer; }
+.companion-settings button:hover, .companion-panel button:hover { background: var(--color-bg-overlay); }
+.companion-settings button:disabled, .companion-panel button:disabled { opacity: .5; cursor: default; }
+.companion-settings :focus-visible, .companion-panel :focus-visible { outline: 2px solid var(--color-text-secondary); outline-offset: 3px; }
+.companion-panel { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 16px; padding: 16px; color: var(--color-text-primary); }
+.companion-feed { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.companion-entry { padding-block: 20px; border-bottom: 1px solid var(--color-border-subtle); line-height: 1.6; overflow-wrap: anywhere; }
+.companion-entry-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; color: var(--color-text-secondary); font-size: 12px; }
+.companion-user-message { background: var(--color-bg-elevated); padding: 12px; border-radius: 12px; margin-bottom: 16px; white-space: pre-wrap; }
+.companion-composer { display: flex; align-items: end; gap: 10px; }
+.companion-empty { padding: 32px 8px; max-width: 48ch; }
+.companion-empty h3 { font-size: 24px; line-height: 1.3; margin-bottom: 16px; }
+.companion-empty p { color: var(--color-text-secondary); line-height: 1.7; margin-bottom: 12px; }
+@media (max-width: 560px) { .companion-fields { grid-template-columns: 1fr; } .companion-panel { padding: 12px; } }

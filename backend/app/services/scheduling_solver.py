@@ -9,8 +9,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from math import ceil, floor
 
-from ortools.sat.python import cp_model
-
 
 @dataclass(frozen=True)
 class SolverTask:
@@ -132,6 +130,9 @@ def _solve_earliest_start(
     earliest_start_slot: int = 0,
     latest_start_slot: int | None = None,
 ) -> int | None:
+    # Loading a task/calendar must not import the numerical solver stack.
+    from ortools.sat.python import cp_model
+
     effective_latest_start_slot = horizon_slots - duration_slots
     if latest_start_slot is not None:
         effective_latest_start_slot = min(

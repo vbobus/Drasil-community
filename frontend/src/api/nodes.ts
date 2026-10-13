@@ -21,7 +21,7 @@ export interface ApiNode {
   nodeType: NodeType | 'strategy';
   categoryId: number;
   parentId: number | null;
-  deadlineAt?: string | null;
+  plannedDate?: string | null; deadlineAt?: string | null;
   timeEstimateMinutes?: number | null;
   emoji?: string | null;
   tags: string[];
@@ -46,7 +46,8 @@ export async function createNode(data: {
   priority?: NodePriority;
   nodeType?: NodeType;
   parentId?: string;
-  deadlineAt?: string | null;
+  timeEstimateMinutes?: number | null;
+  plannedDate?: string | null; deadlineAt?: string | null;
   emoji?: string;
   tags?: string[];
   imageAttachments?: NodeImageAttachment[];
@@ -59,6 +60,8 @@ export async function createNode(data: {
     priority: data.priority ?? 'medium',
     nodeType: data.nodeType || 'task',
     parentId: data.parentId ? parseInt(data.parentId) : null,
+    plannedDate: data.plannedDate ?? null,
+    timeEstimateMinutes: data.timeEstimateMinutes ?? null,
     deadlineAt: data.deadlineAt ?? null,
     emoji: data.emoji ?? null,
     tags: data.tags ?? [],
@@ -81,7 +84,7 @@ export async function updateNode(
     notes?: string;
     status?: NodeStatus;
     priority?: NodePriority;
-    deadlineAt?: string | null;
+    plannedDate?: string | null; deadlineAt?: string | null;
     timeEstimateMinutes?: number | null;
     emoji?: string;
     tags?: string[];

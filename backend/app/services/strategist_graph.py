@@ -460,6 +460,8 @@ def _summarize_performance(diagnostics: dict[str, Any]) -> tuple[str, float | No
 
 def build_public_reasoning_trace(diagnostics: dict[str, Any]) -> dict[str, Any]:
     steps: list[dict[str, Any]] = []
+    kernel_diagnostics = diagnostics.get("kernel")
+    review_blocked = isinstance(kernel_diagnostics, dict) and "native_review_requirement_blocked" in kernel_diagnostics.get("event_types", [])
     stage_lookup = _performance_stage_lookup(diagnostics)
     allowed_step_kinds = {"frame", "context", "plan", "tool", "decision"}
 
@@ -612,9 +614,11 @@ def build_public_reasoning_trace(diagnostics: dict[str, Any]) -> dict[str, Any]:
         _, total_ms = performance_summary
         append_step(
             kind="decision",
-            title="Completed the request",
+            title="Could not prepare the review" if review_blocked else "Completed the request",
             detail=(
-                f"Finished in {_format_duration_ms(total_ms)}."
+                f"Stopped after {_format_duration_ms(total_ms)} without applying changes."
+                if review_blocked and total_ms is not None
+                else f"Finished in {_format_duration_ms(total_ms)}."
                 if total_ms is not None
                 else "Finished the requested work."
             ),
@@ -675,6 +679,8 @@ def build_public_reasoning_trace(diagnostics: dict[str, Any]) -> dict[str, Any]:
         if tool_count
         else "Framed first and answered without task-tool lookup."
     )
+    if review_blocked:
+        summary = f"Could not prepare the review after {tool_count} workspace step{'s' if tool_count != 1 else ''}. Nothing changed."
     return {
         "summary": summary,
         "steps": steps,

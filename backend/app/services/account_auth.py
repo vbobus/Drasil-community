@@ -27,7 +27,9 @@ from uuid import uuid4
 
 from fastapi import HTTPException, Request, status
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.concurrency import run_in_threadpool
 from starlette.responses import JSONResponse, Response
+from app.db.hosted import hosted_storage, hosted_runtime, RegistryConnection, registry_schema
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_AUTH_DATABASE_PATH = BACKEND_ROOT / "drasil-auth.db"
@@ -45,6 +47,9 @@ LOGIN_WINDOW_SECONDS = 5 * 60
 LOGIN_MAX_FAILURES = 8
 _LOGIN_FAILURES: dict[str, list[float]] = {}
 _LOGIN_FAILURES_LOCK = threading.Lock()
+_REGISTRY_READY: set[str] = set()
+_REGISTRY_LOCK = threading.Lock()
+SESSION_COOKIE = "__Host-drasil-session"
 
 
 class _ClosingConnection(sqlite3.Connection):
@@ -104,6 +109,8 @@ def _account_data_root() -> Path:
 
 
 def _connect() -> sqlite3.Connection:
+    if hosted_storage():
+        return RegistryConnection()
     path = _auth_database_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path, timeout=15, factory=_ClosingConnection)
@@ -118,9 +125,29 @@ def _connect() -> sqlite3.Connection:
 
 def initialize_account_store() -> None:
     """Create the account registry without creating or mutating user data."""
+    if hosted_storage():
+        with _REGISTRY_LOCK:
+            namespace = registry_schema()
+            if namespace in _REGISTRY_READY:
+                return
+            _initialize_account_store()
+            _REGISTRY_READY.add(namespace)
+        return
+    _initialize_account_store()
 
+
+def _initialize_account_store() -> None:
     with _connect() as connection:
-        connection.execute("PRAGMA journal_mode = WAL")
+        if hosted_storage():
+            from app.db.schema_version import REGISTRY_SCHEMA_VERSION, current_schema_version, record_schema_version
+            if current_schema_version(connection.connection, REGISTRY_SCHEMA_VERSION):
+                return
+            connection.execute("SELECT pg_advisory_xact_lock(684291001)")
+            connection.execute(f'CREATE SCHEMA IF NOT EXISTS "{registry_schema()}"')
+            if current_schema_version(connection.connection, REGISTRY_SCHEMA_VERSION):
+                return
+        else:
+            connection.execute("PRAGMA journal_mode = WAL")
         connection.executescript(
             """
             CREATE TABLE IF NOT EXISTS accounts (
@@ -157,8 +184,21 @@ def initialize_account_store() -> None:
             );
             CREATE INDEX IF NOT EXISTS ix_external_auth_states_expires_at
                 ON external_auth_states(expires_at);
+            CREATE TABLE IF NOT EXISTS private_settings (
+                account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+                name TEXT NOT NULL,
+                encrypted_value TEXT NOT NULL,
+                PRIMARY KEY (account_id, name)
+            );
+            CREATE TABLE IF NOT EXISTS login_buckets (
+                bucket TEXT PRIMARY KEY,
+                attempts INTEGER NOT NULL,
+                expires_at REAL NOT NULL
+            );
             """
         )
+        if hosted_storage():
+            record_schema_version(connection.connection, REGISTRY_SCHEMA_VERSION)
 
 
 def _normalize_username(value: str) -> str:
@@ -220,6 +260,7 @@ def create_account(
     display_name: str,
     password: str,
     is_admin: bool = False,
+    first_account_only: bool = False,
 ) -> AccountRecord:
     """Create an isolated account; the first account claims a legacy database."""
 
@@ -231,23 +272,33 @@ def create_account(
     _validate_password(password)
 
     account_id = str(uuid4())
-    data_directory = _account_data_root() / account_id
-    data_directory.mkdir(parents=True, exist_ok=False, mode=0o700)
+    data_directory = (
+        Path(tempfile.gettempdir()) / "drasil" / account_id
+        if hosted_storage() else _account_data_root() / account_id
+    )
+    if not hosted_storage():
+        data_directory.mkdir(parents=True, exist_ok=False, mode=0o700)
     salt = secrets.token_bytes(16)
     now = time.time()
 
     try:
         with _connect() as connection:
+            if hosted_storage():
+                connection.execute("SELECT pg_advisory_xact_lock(684291002)")
+            else:
+                connection.execute("BEGIN IMMEDIATE")
             existing_count = int(
                 connection.execute("SELECT COUNT(*) FROM accounts").fetchone()[0]
             )
+            if first_account_only and existing_count:
+                raise ValueError("Drasil has already been initialized.")
             legacy_database_path = Path(
                 os.getenv(
                     "DRASIL_LEGACY_DATABASE_PATH",
                     str(DEFAULT_LEGACY_DATABASE_PATH),
                 )
             ).expanduser().resolve()
-            use_legacy_database = existing_count == 0 and legacy_database_path.exists()
+            use_legacy_database = not hosted_storage() and existing_count == 0 and legacy_database_path.exists()
             database_path = (
                 legacy_database_path
                 if use_legacy_database
@@ -282,7 +333,7 @@ def create_account(
     account = get_account(account_id)
     if account is None:
         raise RuntimeError("The new Drasil account could not be loaded.")
-    if existing_count == 0:
+    if existing_count == 0 and not hosted_storage():
         _copy_legacy_private_configuration(account)
     return account
 
@@ -441,6 +492,28 @@ def assert_login_attempt_allowed(request: Request, username: str) -> str:
     """Apply a small process-local brake to repeated password guesses."""
 
     key = _login_key(request, username)
+    if hosted_storage():
+        initialize_account_store()
+        # Count attempts BEFORE password hashing. PostgreSQL serializes competing
+        # requests, including requests handled by different Vercel instances.
+        host = request.client.host if request.client else "unknown"
+        buckets = (("user:" + username.strip().casefold(), 12), ("ip:" + host, 60))
+        now = time.time()
+        blocked = False
+        with _connect() as connection:
+            connection.execute("DELETE FROM login_buckets WHERE expires_at <= ?", (now,))
+            for value, maximum in sorted(buckets):
+                digest = hashlib.sha256(value.encode()).hexdigest()
+                row = connection.execute(
+                    "INSERT INTO login_buckets (bucket, attempts, expires_at) VALUES (?, 1, ?) "
+                    "ON CONFLICT (bucket) DO UPDATE SET attempts = login_buckets.attempts + 1 "
+                    "RETURNING attempts", (digest, now + LOGIN_WINDOW_SECONDS),
+                ).fetchone()
+                blocked = blocked or row[0] > maximum
+        if blocked:
+            raise HTTPException(status_code=429, detail="Too many sign-in attempts. Try again later.",
+                                headers={"Retry-After": str(LOGIN_WINDOW_SECONDS)})
+        return key
     cutoff = time.monotonic() - LOGIN_WINDOW_SECONDS
     with _LOGIN_FAILURES_LOCK:
         recent = [stamp for stamp in _LOGIN_FAILURES.get(key, []) if stamp > cutoff]
@@ -458,6 +531,8 @@ def assert_login_attempt_allowed(request: Request, username: str) -> str:
 
 
 def record_login_result(key: str, *, succeeded: bool) -> None:
+    if hosted_storage():
+        return
     with _LOGIN_FAILURES_LOCK:
         if succeeded:
             _LOGIN_FAILURES.pop(key, None)
@@ -534,7 +609,7 @@ def request_token(request: Request) -> str | None:
     scheme, _, value = authorization.partition(" ")
     if scheme.casefold() == "bearer" and value.strip():
         return value.strip()
-    return None
+    return request.cookies.get(SESSION_COOKIE) if hosted_runtime() else None
 
 
 def active_account(*, required: bool = True) -> AccountRecord | None:
@@ -563,7 +638,8 @@ def account_private_path(name: str) -> Path:
             return BACKEND_ROOT / name
         raise RuntimeError("Private configuration access requires an active Drasil account.")
     path = account.data_directory / name
-    path.parent.mkdir(parents=True, exist_ok=True)
+    if not hosted_storage():
+        path.parent.mkdir(parents=True, exist_ok=True)
     return path
 
 
@@ -591,7 +667,7 @@ def _is_loopback_request(request: Request) -> bool:
 
 
 def bootstrap_request_allowed(request: Request, supplied_token: str | None) -> bool:
-    if _is_loopback_request(request):
+    if not hosted_storage() and _is_loopback_request(request):
         return True
     configured = os.getenv("DRASIL_BOOTSTRAP_TOKEN", "").strip()
     return bool(
@@ -610,6 +686,13 @@ class AccountContextMiddleware(BaseHTTPMiddleware):
         call_next: RequestResponseEndpoint,
     ) -> Response:
         path = request.url.path.rstrip("/") or "/"
+        if hosted_runtime() and os.getenv("DRASIL_TEST_ISOLATED_DB") == "1":
+            return JSONResponse(status_code=503, content={"detail": "Invalid server configuration."})
+        if hosted_runtime() and request.method not in {"GET", "HEAD", "OPTIONS"}:
+            origin = request.headers.get("origin")
+            expected = os.getenv("DRASIL_FRONTEND_ORIGIN", "").rstrip("/")
+            if origin and origin.rstrip("/") != expected:
+                return JSONResponse(status_code=403, content={"detail": "Request origin is not permitted."})
         if request.method == "OPTIONS" or not path.startswith("/api/"):
             return await call_next(request)
         if os.getenv("DRASIL_TEST_ISOLATED_DB") == "1":
@@ -621,7 +704,7 @@ class AccountContextMiddleware(BaseHTTPMiddleware):
             return response
 
         if path == GOOGLE_OAUTH_CALLBACK_PATH:
-            account = resolve_external_auth_state(
+            account = await run_in_threadpool(resolve_external_auth_state,
                 request.query_params.get("state"),
                 provider="google-calendar",
             )
@@ -635,7 +718,23 @@ class AccountContextMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
 
         token = request_token(request)
-        account = resolve_session(token)
+        if token and token.startswith("dcw."):
+            # A worker token is never a browser login and cannot approve or mutate tasks.
+            if not path.startswith("/api/v1/companion/worker/"):
+                return JSONResponse(status_code=403, content={"detail": "Worker credential cannot access this endpoint."})
+            from app.services.companion import authenticate_worker
+            account = await run_in_threadpool(authenticate_worker, token)
+            if account is None:
+                return JSONResponse(status_code=401, content={"detail": "Reconnect the companion worker."})
+            request.state.drasil_account = account
+            request.state.companion_worker = True
+            with use_account(account):
+                response = await call_next(request)
+            response.headers["Cache-Control"] = "no-store"
+            return response
+        from app.core.request_timing import timed
+        with timed("auth"):
+            account = await run_in_threadpool(resolve_session, token)
         if account is None:
             return JSONResponse(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -644,8 +743,9 @@ class AccountContextMiddleware(BaseHTTPMiddleware):
             )
         request.state.drasil_account = account
         request.state.drasil_session_token = token
+        if hosted_runtime() and path.startswith("/api/v1/admin/") and not account.is_admin:
+            return JSONResponse(status_code=403, content={"detail": "Administrator access required."})
         with use_account(account):
             response = await call_next(request)
-        if path.startswith("/api/v1/accounts"):
-            response.headers["Cache-Control"] = "no-store"
+        response.headers["Cache-Control"] = "no-store"
         return response

@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { useNodeStore } from './useNodeStore';
+import type { StrategyNode } from '../types/node';
 import * as calendarBlocksApi from '../api/calendarBlocks';
 import * as plannerApi from '../api/planner';
 import * as schedulingApi from '../api/scheduling';
@@ -20,6 +22,7 @@ import type {
 } from '../types/planner';
 
 interface CalendarState {
+  coveredRanges: { startAt: string; endAt: string; loadedAt: number }[];
   blocks: CalendarBlock[];
   scheduledTaskIds: string[];
   draftBlocks: CalendarBlock[];
@@ -37,7 +40,12 @@ interface CalendarState {
 }
 
 interface CalendarActions {
-  fetchBlocks: (startAt: string, endAt: string) => Promise<void>;
+  hydrateCalendar: (blocks: CalendarBlock[], scheduledTaskIds: string[], range: { startAt: string; endAt: string }) => void;
+  reset: () => void;
+  removeTaskDay: (taskId: string, day: string) => Promise<calendarBlocksApi.RemovedTaskDay>;
+  ingestMovedBlocks: (blocks: CalendarBlock[]) => void;
+  unscheduleBlock: (blockId: string, day: string) => Promise<void>;
+  fetchBlocks: (startAt: string, endAt: string, options?: { force?: boolean; focus?: boolean }) => Promise<void>;
   createManualBlock: (data: ManualCalendarBlockCreate) => Promise<CalendarBlock>;
   updateBlockTime: (blockId: string, data: CalendarBlockTimeUpdate) => Promise<CalendarBlock>;
   deleteBlock: (blockId: string) => Promise<void>;
@@ -60,8 +68,73 @@ interface CalendarActions {
 type CalendarStore = CalendarState & CalendarActions;
 
 const pendingTimeUpdateVersions = new Map<string, number>();
+const pendingUnscheduleBlockIds = new Set<string>();
 const DEFAULT_SCHEDULE_SLOT_MINUTES = 15;
 let calendarFetchRequestVersion = 0;
+const pendingRanges = new Map<string, { startAt: string; endAt: string; version: number; promise: Promise<void> }>();
+const interruptedRanges = new Map<string, { startAt: string; endAt: string }>();
+let activeCalendarWrites = 0;
+let calendarOwnerVersion = 0;
+function cachedTask(taskId: string): StrategyNode | undefined {
+  const find = (nodes: StrategyNode[]): StrategyNode | undefined => {
+    for (const node of nodes) {
+      const match = node.id === taskId ? node : find(node.children);
+      if (match) return match;
+    }
+  };
+  const state = useNodeStore.getState();
+  return find(state.nodes) ?? find(Object.values(state.categoryNodeCache).flat());
+}
+export function getCalendarMutationRevision() { return calendarFetchRequestVersion; }
+export function calendarHasPendingWrites() { return activeCalendarWrites > 0; }
+
+function beginCalendarWrite() {
+  for (const range of pendingRanges.values()) interruptedRanges.set(`${range.startAt}:${range.endAt}`, range);
+  calendarFetchRequestVersion += 1;
+  activeCalendarWrites += 1;
+  useCalendarStore.setState({ isLoading: false });
+  return calendarOwnerVersion;
+}
+
+function finishCalendarWrite(ownerVersion: number) {
+  if (ownerVersion !== calendarOwnerVersion) return;
+  for (const range of pendingRanges.values()) interruptedRanges.set(`${range.startAt}:${range.endAt}`, range);
+  calendarFetchRequestVersion += 1;
+  activeCalendarWrites -= 1;
+  if (activeCalendarWrites > 0) return;
+  const ranges = [...interruptedRanges.values()];
+  interruptedRanges.clear();
+  const previousError = useCalendarStore.getState().error;
+  for (const range of ranges) void useCalendarStore.getState().fetchBlocks(range.startAt, range.endAt, { force: false, focus: false });
+  if (previousError) useCalendarStore.setState({ error: previousError });
+}
+let membershipLoadedAt = 0;
+let membershipRequest: { version: number; promise: Promise<string[]> } | null = null;
+const RANGE_FRESH_MS = 60_000;
+
+function overlaps(block: CalendarBlock, startAt: string, endAt: string) {
+  return Date.parse(block.startAt) < Date.parse(endAt) && Date.parse(block.endAt) > Date.parse(startAt);
+}
+
+function covers(range: { startAt: string; endAt: string }, startAt: string, endAt: string) {
+  return Date.parse(range.startAt) <= Date.parse(startAt) && Date.parse(range.endAt) >= Date.parse(endAt);
+}
+
+function missingCoverage(ranges: CalendarState['coveredRanges'], startAt: string, endAt: string) {
+  let cursor = Date.parse(startAt);
+  const end = Date.parse(endAt);
+  const gaps: { startAt: string; endAt: string }[] = [];
+  for (const range of ranges.filter(range => Date.now() - range.loadedAt < RANGE_FRESH_MS)
+    .sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt))) {
+    const first = Date.parse(range.startAt), last = Date.parse(range.endAt);
+    if (last <= cursor || first >= end) continue;
+    if (first > cursor) gaps.push({ startAt: toLocalIsoMinute(new Date(cursor)), endAt: toLocalIsoMinute(new Date(first)) });
+    cursor = Math.max(cursor, last);
+    if (cursor >= end) break;
+  }
+  if (cursor < end) gaps.push({ startAt: toLocalIsoMinute(new Date(cursor)), endAt });
+  return gaps;
+}
 let scheduleDraftRequestVersion = 0;
 let plannerProposalRequestVersion = 0;
 
@@ -287,7 +360,8 @@ function removePlannerProposalBlock(
   };
 }
 
-export const useCalendarStore = create<CalendarStore>((set) => ({
+export const useCalendarStore = create<CalendarStore>((set, get) => ({
+  coveredRanges: [],
   blocks: [],
   scheduledTaskIds: [],
   draftBlocks: [],
@@ -303,39 +377,87 @@ export const useCalendarStore = create<CalendarStore>((set) => ({
   schedulePatchProposal: null,
   lastRange: null,
 
-  fetchBlocks: async (startAt, endAt) => {
-    const requestVersion = ++calendarFetchRequestVersion;
-    set({
-      isLoading: true,
-      error: null,
-      lastRange: { startAt, endAt },
-    });
-    try {
-      const [blocks, scheduledTaskIds] = await Promise.all([
-        calendarBlocksApi.fetchCalendarBlocks(startAt, endAt),
-        calendarBlocksApi.fetchScheduledTaskIds(),
-      ]);
-      if (requestVersion !== calendarFetchRequestVersion) {
-        return;
-      }
-      set({
-        blocks: sortBlocks(blocks),
-        scheduledTaskIds,
-        isLoading: false,
-      });
-    } catch (error) {
-      if (requestVersion !== calendarFetchRequestVersion) {
-        return;
-      }
-      const message = error instanceof Error ? error.message : 'Failed to load calendar blocks.';
-      set({ error: message, isLoading: false });
+  reset: () => {
+    calendarOwnerVersion += 1;
+    activeCalendarWrites = 0;
+    interruptedRanges.clear();
+    calendarFetchRequestVersion += 1;
+    scheduleDraftRequestVersion += 1;
+    plannerProposalRequestVersion += 1;
+    pendingRanges.clear();
+    membershipLoadedAt = 0;
+    membershipRequest = null;
+    pendingTimeUpdateVersions.clear();
+    pendingUnscheduleBlockIds.clear();
+    set({ blocks: [], scheduledTaskIds: [], coveredRanges: [], lastRange: null, isLoading: false, error: null, draftBlocks: [],
+      scheduleDraftResult: null, schedulePatchProposal: null, scheduleError: null, plannerProposalError: null,
+      isScheduling: false, isPlannerProposing: false });
+  },
+
+  hydrateCalendar: (blocks, scheduledTaskIds, range) => {
+    calendarFetchRequestVersion += 1;
+    membershipLoadedAt = Date.now();
+    const ids = new Set(blocks.map(block => block.id));
+    set(state => ({ blocks: sortBlocks([...state.blocks.filter(block => !ids.has(block.id) && !overlaps(block, range.startAt, range.endAt)), ...blocks]),
+      scheduledTaskIds, coveredRanges: [...state.coveredRanges.filter(existing => !covers(range, existing.startAt, existing.endAt)), { ...range, loadedAt: Date.now() }].slice(-8),
+      isLoading: false, error: null }));
+  },
+
+  fetchBlocks: async (startAt, endAt, options) => {
+    const force = options?.force !== false;
+    const missing = missingCoverage(get().coveredRanges, startAt, endAt);
+    const cached = missing.length === 0;
+    if (options?.focus !== false) set({ lastRange: { startAt, endAt } });
+    if (!force && cached) return;
+    if (activeCalendarWrites > 0) {
+      interruptedRanges.set(`${startAt}:${endAt}`, { startAt, endAt });
+      return;
     }
+    if (force) {
+      calendarFetchRequestVersion += 1;
+      membershipLoadedAt = 0;
+      set({ coveredRanges: [] });
+    }
+    const version = calendarFetchRequestVersion;
+    const pending = [...pendingRanges.values()].find(range => range.version === version && covers(range, startAt, endAt));
+    if (pending) return pending.promise;
+    if (!force && (missing.length > 1 || (missing.length === 1 && !covers(missing[0], startAt, endAt)))) {
+      await Promise.all(missing.map(range => get().fetchBlocks(range.startAt, range.endAt, { force: false, focus: false })));
+      return;
+    }
+    set({ isLoading: !cached, error: null });
+    const key = `${version}:${startAt}:${endAt}`;
+    const promise = (async () => {
+      try {
+        let membership = Promise.resolve(get().scheduledTaskIds);
+        if (Date.now() - membershipLoadedAt >= RANGE_FRESH_MS) {
+          if (membershipRequest?.version !== version) membershipRequest = { version, promise: calendarBlocksApi.fetchScheduledTaskIds() };
+          membership = membershipRequest.promise;
+        }
+        const [blocks, scheduledTaskIds] = await Promise.all([calendarBlocksApi.fetchCalendarBlocks(startAt, endAt), membership]);
+        if (version !== calendarFetchRequestVersion) return;
+        membershipLoadedAt = Date.now();
+        const ids = new Set(blocks.map(block => block.id));
+        set(state => ({ blocks: sortBlocks([...state.blocks.filter(block => !ids.has(block.id) && !overlaps(block, startAt, endAt)), ...blocks]),
+          scheduledTaskIds, isLoading: false,
+          coveredRanges: [...state.coveredRanges.filter(range => Date.now() - range.loadedAt < RANGE_FRESH_MS && !covers({ startAt, endAt }, range.startAt, range.endAt)), { startAt, endAt, loadedAt: Date.now() }].slice(-8) }));
+      } catch (error) {
+        if (version === calendarFetchRequestVersion) set({ error: error instanceof Error ? error.message : 'Failed to load calendar blocks.', isLoading: false });
+      } finally {
+        pendingRanges.delete(key);
+        if (membershipRequest?.version === version) membershipRequest = null;
+      }
+    })();
+    pendingRanges.set(key, { startAt, endAt, version, promise });
+    return promise;
   },
 
   createManualBlock: async (data) => {
+    const ownerVersion = beginCalendarWrite();
     set({ error: null });
     try {
       const createdBlock = await calendarBlocksApi.createCalendarBlock(data);
+      if (ownerVersion !== calendarOwnerVersion) return createdBlock;
       set((state) => ({
         blocks: sortBlocks([...state.blocks, createdBlock]),
         scheduledTaskIds: Array.from(
@@ -347,12 +469,50 @@ export const useCalendarStore = create<CalendarStore>((set) => ({
       const message = error instanceof Error ? error.message : 'Failed to create calendar block.';
       set({ error: message });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishCalendarWrite(ownerVersion);
+    }
+  },
+
+  ingestMovedBlocks: (moved) => {
+    // A range fetch begun before the move must not restore the old booking.
+    const ownerVersion = beginCalendarWrite();
+    const ids = new Set(moved.map(block => block.id));
+    set(state => ({ isLoading: false, blocks: sortBlocks([
+      ...state.blocks.filter(block => !ids.has(block.id)), ...moved,
+    ]) }));
+    finishCalendarWrite(ownerVersion);
+  },
+
+  removeTaskDay: async (taskId, day) => {
+    const ownerVersion = beginCalendarWrite();
+    try {
+      const result = await calendarBlocksApi.removeTaskDay(taskId, day);
+      if (ownerVersion !== calendarOwnerVersion) return result;
+      const affected = new Set([...result.removedBlockIds, ...result.updatedBlocks.map(block => block.id)]);
+      for (const [id, date] of Object.entries(result.plannedDates)) useNodeStore.getState().setPlannedDayFromServer(id, date);
+      set(state => ({ isLoading: false, scheduledTaskIds: result.scheduledTaskIds, blocks: sortBlocks([
+        ...state.blocks.filter(block => !affected.has(block.id)), ...result.updatedBlocks,
+      ]) }));
+      return result;
+    } finally {
+      finishCalendarWrite(ownerVersion);
     }
   },
 
   updateBlockTime: async (blockId, data) => {
+    const ownerVersion = beginCalendarWrite();
     const requestVersion = (pendingTimeUpdateVersions.get(blockId) ?? 0) + 1;
     pendingTimeUpdateVersions.set(blockId, requestVersion);
+    const originalBlock = get().blocks.find(block => block.id === blockId);
+    const previousPlannedDate = originalBlock ? cachedTask(originalBlock.taskId)?.plannedDate : undefined;
+    const nextDay = data.startAt.slice(0, 10);
+    const optimisticPlannedDate = originalBlock && ['scheduled', 'protected'].includes(originalBlock.variant)
+      && previousPlannedDate === originalBlock.startAt.slice(0, 10) && nextDay !== previousPlannedDate
+      ? nextDay : undefined;
+    if (originalBlock && optimisticPlannedDate !== undefined) {
+      useNodeStore.getState().setPlannedDayFromServer(originalBlock.taskId, optimisticPlannedDate);
+    }
     let previousBlock: CalendarBlock | null = null;
 
     set((state) => ({
@@ -374,10 +534,15 @@ export const useCalendarStore = create<CalendarStore>((set) => ({
 
     try {
       const updatedBlock = await calendarBlocksApi.updateCalendarBlock(blockId, data);
+      if (ownerVersion !== calendarOwnerVersion) return updatedBlock;
       if (pendingTimeUpdateVersions.get(blockId) !== requestVersion) {
         return updatedBlock;
       }
       pendingTimeUpdateVersions.delete(blockId);
+      if (updatedBlock.taskPlannedDate !== undefined
+          && cachedTask(updatedBlock.taskId)?.plannedDate === (optimisticPlannedDate ?? previousPlannedDate)) {
+        useNodeStore.getState().setPlannedDayFromServer(updatedBlock.taskId, updatedBlock.taskPlannedDate);
+      }
       set((state) => ({
         blocks: sortBlocks(
           state.blocks.map((block) => (block.id === blockId ? updatedBlock : block)),
@@ -386,8 +551,13 @@ export const useCalendarStore = create<CalendarStore>((set) => ({
       return updatedBlock;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to update calendar block.';
+      if (ownerVersion !== calendarOwnerVersion) throw error;
       if (pendingTimeUpdateVersions.get(blockId) === requestVersion) {
         pendingTimeUpdateVersions.delete(blockId);
+        if (originalBlock && optimisticPlannedDate !== undefined
+            && cachedTask(originalBlock.taskId)?.plannedDate === optimisticPlannedDate) {
+          useNodeStore.getState().setPlannedDayFromServer(originalBlock.taskId, previousPlannedDate ?? null);
+        }
         const blockToRestore = previousBlock;
         set((state) => ({
           error: message,
@@ -401,13 +571,38 @@ export const useCalendarStore = create<CalendarStore>((set) => ({
         set({ error: message });
       }
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishCalendarWrite(ownerVersion);
+    }
+  },
+
+  unscheduleBlock: async (blockId, day) => {
+    if (pendingUnscheduleBlockIds.has(blockId)) return;
+    const ownerVersion = beginCalendarWrite();
+    pendingUnscheduleBlockIds.add(blockId);
+    set({ error: null });
+    try {
+      const result = await calendarBlocksApi.unscheduleCalendarBlock(blockId, day);
+      if (ownerVersion !== calendarOwnerVersion) return;
+      useNodeStore.getState().setPlannedDayFromServer(String(result.taskId), result.plannedDate);
+      set(state => ({ blocks: state.blocks.filter(block => block.id !== blockId),
+        scheduledTaskIds: result.scheduledTaskIds.map(String) }));
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Could not move the booking. Please retry.';
+      set({ error: message });
+      throw error;
+    } finally {
+      pendingUnscheduleBlockIds.delete(blockId);
+      finishCalendarWrite(ownerVersion);
     }
   },
 
   deleteBlock: async (blockId) => {
+    const ownerVersion = beginCalendarWrite();
     set({ error: null });
     try {
       await calendarBlocksApi.deleteCalendarBlock(blockId);
+      if (ownerVersion !== calendarOwnerVersion) return;
       let scheduledTaskIds: string[] | null = null;
       try {
         scheduledTaskIds = await calendarBlocksApi.fetchScheduledTaskIds();
@@ -428,6 +623,8 @@ export const useCalendarStore = create<CalendarStore>((set) => ({
       const message = error instanceof Error ? error.message : 'Failed to delete calendar block.';
       set({ error: message });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishCalendarWrite(ownerVersion);
     }
   },
 

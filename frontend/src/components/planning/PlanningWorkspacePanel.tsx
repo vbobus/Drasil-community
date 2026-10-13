@@ -1,4 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { TaskPageDialog } from './TaskPageDialog';
+import { WeeklyPlanningBoard } from './WeeklyPlanningBoard';
 import { createPortal } from 'react-dom';
 import type {
   ChangeEvent,
@@ -16,12 +18,15 @@ import type {
 import type { AppDestination } from '../../store/useUiStore';
 import { useCategoryStore } from '../../store/useCategoryStore';
 import { useNodeStore } from '../../store/useNodeStore';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { countVisibleTreeNodes, isArchivedNode, visibleChildrenForLane } from '../../lib/nodeState';
 import { WorkspaceIcon } from '../../lib/workspaceIcons';
 import {
   Check,
   Filter,
   Layers3,
+  CalendarDays,
+  ListTree,
   MoreHorizontal,
   Pencil,
   RefreshCw,
@@ -61,6 +66,11 @@ interface PlanningWorkspacePanelProps {
   isArchivedExpanded: boolean;
   onArchivedToggle: () => void;
   onAddNode: () => void;
+  onAddPlannedTask: (day?: string) => void;
+  planningDay: string | null;
+  onPlanningDayChange: (day: string | null) => void;
+  isCalendarOpen: boolean;
+  onCalendarToggle: () => void;
   onStatusChange: (id: string, done: boolean) => void;
   onTitleChange: (id: string, title: string) => void;
   onStageNode: (id: string) => void;
@@ -103,6 +113,7 @@ interface VirtualNodeRow {
   lane: TreeLane;
   visibleChildCount: number;
   continuationDepths: number[];
+  hasNextSibling: boolean;
 }
 
 interface VirtualSectionRow {
@@ -144,11 +155,12 @@ interface PointerDropTarget {
   index: number;
   targetNode: StrategyNode;
   intent: PointerDropIntent;
+  root?: boolean;
 }
 
-const TREE_ROW_HEIGHT = 36;
+const TREE_ROW_HEIGHT = 72;
 const TREE_OVERSCAN_ROWS = 10;
-const POINTER_DRAG_THRESHOLD = 1;
+const POINTER_DRAG_THRESHOLD = 6;
 const TREE_AUTOSCROLL_EDGE = 44;
 const TREE_AUTOSCROLL_STEP = 18;
 const TREE_VIEW_SETTINGS_STORAGE_KEY = 'drasil.tree-view-settings.v2';
@@ -306,6 +318,12 @@ const utilityContent: Record<
   Exclude<AppDestination, 'all' | 'category'>,
   { eyebrow: string; title: string; body: string; detail: string }
 > = {
+  habits: {
+    eyebrow: 'Habit tracking',
+    title: 'Build a steady rhythm',
+    body: 'Track daily check-ins and earn rewards in the Habits utility.',
+    detail: 'Your task tree and calendar remain available in Workspaces.',
+  },
   'my-day': {
     eyebrow: 'Daily focus',
     title: 'My Day sits outside category structure',
@@ -364,6 +382,7 @@ function collectVirtualNodeRows(
       depth,
       lane,
       visibleChildCount: visibleChildren.length,
+      hasNextSibling: !isLastSibling,
       continuationDepths: ancestorContinuations.flatMap((continues, level) =>
         continues ? [level] : [],
       ),
@@ -553,20 +572,6 @@ function formatStatus(status: StrategyNode['status']) {
   return 'To do';
 }
 
-function formatDeadline(deadlineAt?: string | null) {
-  if (!deadlineAt) return 'No deadline';
-  const parsedDate = new Date(`${deadlineAt}T00:00:00`);
-  if (Number.isNaN(parsedDate.getTime())) {
-    return 'No deadline';
-  }
-
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(parsedDate);
-}
-
 function createAttachmentId(file: File) {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID();
@@ -616,6 +621,11 @@ export function PlanningWorkspacePanel({
   isArchivedExpanded,
   onArchivedToggle,
   onAddNode,
+  onAddPlannedTask,
+  planningDay,
+  onPlanningDayChange,
+  isCalendarOpen,
+  onCalendarToggle,
   onStatusChange,
   onTitleChange,
   onStageNode,
@@ -631,6 +641,11 @@ export function PlanningWorkspacePanel({
   const isWorkspaceView =
     isAllWorkspace || (activeDestination === 'category' && activeCategory !== null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const isCompact = useMediaQuery('(max-width: 1023px)');
+  const [desktopRepositoryOpen, setDesktopRepositoryOpen] = useState(true);
+  const [mobileRepositoryOpen, setMobileRepositoryOpen] = useState(false);
+  const repositoryOpen = isCompact ? mobileRepositoryOpen : desktopRepositoryOpen;
+  const setRepositoryOpen = isCompact ? setMobileRepositoryOpen : setDesktopRepositoryOpen;
   const [openBriefNodeId, setOpenBriefNodeId] = useState<string | null>(null);
   const [expandedNodeIds, setExpandedNodeIds] = useState<Record<string, boolean>>({});
   const [hoveredTreeNodeId, setHoveredTreeNodeId] = useState<string | null>(null);
@@ -667,6 +682,7 @@ export function PlanningWorkspacePanel({
   const imageInputRef = useRef<HTMLInputElement>(null);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const treeScrollRef = useRef<HTMLDivElement>(null);
+  const suppressClickUntilRef = useRef(0);
   const pointerDragPreviewRef = useRef<HTMLDivElement>(null);
   const viewportFrameRef = useRef<number | null>(null);
   const pointerDragFrameRef = useRef<number | null>(null);
@@ -945,22 +961,19 @@ export function PlanningWorkspacePanel({
     isBacklogExpanded,
     isNodesLoading,
   ]);
-  const totalTreeHeight = virtualTreeRows.length * TREE_ROW_HEIGHT;
-  const firstVirtualRowIndex = Math.max(
-    0,
-    Math.floor(treeViewport.scrollTop / TREE_ROW_HEIGHT) - TREE_OVERSCAN_ROWS,
-  );
-  const lastVirtualRowIndex = Math.min(
-    virtualTreeRows.length,
-    Math.ceil((treeViewport.scrollTop + treeViewport.height) / TREE_ROW_HEIGHT) +
-      TREE_OVERSCAN_ROWS,
-  );
-  const visibleVirtualRows = virtualTreeRows
-    .slice(firstVirtualRowIndex, lastVirtualRowIndex)
-    .map((row, index) => ({
-      row,
-      index: firstVirtualRowIndex + index,
-    }));
+  const rowLayout = useMemo(() => {
+    let top = 0;
+    return virtualTreeRows.map(row => {
+      const height = row.kind === 'node' ? TREE_ROW_HEIGHT : row.kind === 'empty' ? 88 : 40;
+      const layout = { top, height };
+      top += height;
+      return layout;
+    });
+  }, [virtualTreeRows]);
+  const totalTreeHeight = rowLayout.length ? rowLayout.at(-1)!.top + rowLayout.at(-1)!.height : 0;
+  const visibleVirtualRows = virtualTreeRows.map((row, index) => ({ row, index }))
+    .filter(({ index }) => rowLayout[index].top + rowLayout[index].height >= treeViewport.scrollTop - TREE_OVERSCAN_ROWS * TREE_ROW_HEIGHT
+      && rowLayout[index].top <= treeViewport.scrollTop + treeViewport.height + TREE_OVERSCAN_ROWS * TREE_ROW_HEIGHT);
   const hoveredTreeNode = hoveredTreeNodeId ? visibleNodeById.get(hoveredTreeNodeId) ?? null : null;
   const currentTitleDraft = focusNode ? titleDrafts[focusNode.id] ?? focusNode.title : '';
   const currentBriefNotes = focusNode ? briefNotes[focusNode.id] ?? focusNode.notes ?? '' : '';
@@ -1039,7 +1052,7 @@ export function PlanningWorkspacePanel({
 
       const centeredScrollTop = Math.max(
         0,
-        rowIndex * TREE_ROW_HEIGHT - Math.max(0, scrollElement.clientHeight / 2 - TREE_ROW_HEIGHT),
+        rowLayout[rowIndex].top - Math.max(0, scrollElement.clientHeight / 2 - TREE_ROW_HEIGHT),
       );
       scrollElement.scrollTo({ top: centeredScrollTop, behavior: 'smooth' });
       updateTreeViewport();
@@ -1075,6 +1088,7 @@ export function PlanningWorkspacePanel({
     onCalendarFocusHandled,
     updateTreeViewport,
     virtualTreeRows,
+    rowLayout,
     visibleNodeById,
   ]);
 
@@ -1084,10 +1098,6 @@ export function PlanningWorkspacePanel({
       clientY: number,
       sourceNode: StrategyNode,
     ): PointerDropTarget | null => {
-      if (isAllWorkspace) {
-        return null;
-      }
-
       const scrollElement = treeScrollRef.current;
       if (!scrollElement || virtualTreeRows.length === 0) {
         return null;
@@ -1103,21 +1113,23 @@ export function PlanningWorkspacePanel({
         return null;
       }
 
+      const rootDrop = scrollElement.querySelector<HTMLElement>('[data-tree-root-drop]')?.getBoundingClientRect();
+      if (rootDrop && clientY >= rootDrop.top && clientY <= rootDrop.bottom) {
+        return { index: -1, targetNode: sourceNode, intent: 'after', root: true };
+      }
       const absoluteY = scrollElement.scrollTop + clientY - rect.top;
-      const rowIndex = Math.max(
-        0,
-        Math.min(virtualTreeRows.length - 1, Math.floor(absoluteY / TREE_ROW_HEIGHT)),
-      );
+      const rowIndex = rowLayout.findIndex(layout => absoluteY >= layout.top && absoluteY < layout.top + layout.height);
+      if (rowIndex < 0) return null;
       const row = virtualTreeRows[rowIndex];
       if (row.kind !== 'node') {
         return null;
       }
 
-      if (row.node.id === sourceNode.id || containsNodeId(sourceNode, row.node.id)) {
+      if (row.node.categoryId !== sourceNode.categoryId || row.node.id === sourceNode.id || containsNodeId(sourceNode, row.node.id)) {
         return null;
       }
 
-      const offsetWithinRow = absoluteY - rowIndex * TREE_ROW_HEIGHT;
+      const offsetWithinRow = absoluteY - rowLayout[rowIndex].top;
       const topZone = TREE_ROW_HEIGHT * 0.28;
       const bottomZone = TREE_ROW_HEIGHT * 0.72;
       const intent =
@@ -1133,7 +1145,7 @@ export function PlanningWorkspacePanel({
         intent,
       };
     },
-    [isAllWorkspace, virtualTreeRows],
+    [rowLayout, virtualTreeRows],
   );
 
   const isPointerInsideSelectedPanel = useCallback((clientX: number, clientY: number) => {
@@ -1149,12 +1161,14 @@ export function PlanningWorkspacePanel({
   const applyPointerDrop = useCallback(
     (source: NodeDragPayload, target: PointerDropTarget) => {
       const parentId =
-        target.intent === 'inside' ? target.targetNode.id : (target.targetNode.parentId ?? null);
+        target.root ? null : target.intent === 'inside' ? target.targetNode.id : (target.targetNode.parentId ?? null);
       const targetIndex =
-        target.intent === 'inside'
+        target.root ? useNodeStore.getState().nodes.filter(node => node.id !== source.id && node.categoryId === source.categoryId && !node.parentId && node.isBacklog === target.targetNode.isBacklog).length : target.intent === 'inside'
           ? target.targetNode.children.length
           : getPointerReorderIndex(target.intent, target.targetNode, source);
 
+      if (target.intent === 'inside') setExpandedNodeIds(current => ({ ...current, [target.targetNode.id]: true }));
+      updateTreeViewSettings({ sort: 'manual' });
       void moveNode(source.id, {
         parentId,
         targetIndex,
@@ -1162,7 +1176,7 @@ export function PlanningWorkspacePanel({
         isBacklog: target.targetNode.isBacklog,
       }).catch(() => undefined);
     },
-    [moveNode],
+    [moveNode, updateTreeViewSettings],
   );
 
   const handlePointerDragStart = useCallback(
@@ -1172,7 +1186,7 @@ export function PlanningWorkspacePanel({
       }
 
       if (
-        event.target instanceof HTMLElement &&
+        event.target instanceof Element &&
         event.target.closest('button, input, textarea, select, [contenteditable="true"]')
       ) {
         return;
@@ -1189,7 +1203,6 @@ export function PlanningWorkspacePanel({
       const startY = event.clientY;
       let didStartDrag = false;
       let didCommitFirstDragFrame = false;
-      let latestDropTarget: PointerDropTarget | null = null;
       let latestPreviewX = startX;
       let latestPreviewY = startY;
 
@@ -1212,7 +1225,6 @@ export function PlanningWorkspacePanel({
       };
 
       const updatePointerDropTarget = (nextDropTarget: PointerDropTarget | null) => {
-        latestDropTarget = nextDropTarget;
         if (arePointerDropTargetsEqual(pointerDropTargetRef.current, nextDropTarget)) {
           return;
         }
@@ -1228,6 +1240,7 @@ export function PlanningWorkspacePanel({
         }
         pointerDropTargetRef.current = null;
         document.body.classList.remove('app-pointer-dragging');
+        useNodeStore.getState().setActiveDragPayload(null);
         setPointerDragState(null);
         setPointerDropTarget(null);
         setHoveredTreeNodeId(null);
@@ -1265,6 +1278,7 @@ export function PlanningWorkspacePanel({
         if (!didStartDrag) {
           didStartDrag = true;
           document.body.classList.add('app-pointer-dragging');
+          useNodeStore.getState().setActiveDragPayload(source);
           window.getSelection()?.removeAllRanges();
           setHoveredTreeNodeId(null);
         }
@@ -1304,10 +1318,16 @@ export function PlanningWorkspacePanel({
         }
 
         upEvent.preventDefault();
+        suppressClickUntilRef.current = Date.now() + 400;
         const finalDropTarget =
-          resolvePointerDropTarget(upEvent.clientX, upEvent.clientY, node) ?? latestDropTarget;
+          resolvePointerDropTarget(upEvent.clientX, upEvent.clientY, node);
         clearPointerDrag();
 
+        const weekDay = document.elementFromPoint(upEvent.clientX, upEvent.clientY)?.closest<HTMLElement>('[data-week-day]')?.dataset.weekDay;
+        if (weekDay) {
+          void updateNode(source.id, { plannedDate: weekDay, ...(node.isBacklog ? { isBacklog: false } : {}) }).catch(() => undefined);
+          return;
+        }
         if (onSchedulePointerDrop?.(source, upEvent.clientX, upEvent.clientY)) {
           return;
         }
@@ -1341,26 +1361,10 @@ export function PlanningWorkspacePanel({
       onSchedulePointerDrop,
       onStageNode,
       resolvePointerDropTarget,
+      updateNode,
       updateTreeViewport,
     ],
   );
-
-  useEffect(() => {
-    if (!focusNode) {
-      return;
-    }
-
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setOpenBriefNodeId(null);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [focusNode]);
 
   useEffect(() => {
     updateTreeViewport();
@@ -1391,6 +1395,7 @@ export function PlanningWorkspacePanel({
         window.clearTimeout(calendarSpotlightTimerRef.current);
       }
       pointerDropTargetRef.current = null;
+      if (document.body.classList.contains('app-pointer-dragging')) useNodeStore.getState().setActiveDragPayload(null);
       document.body.classList.remove('app-pointer-dragging');
     };
   }, []);
@@ -1422,7 +1427,7 @@ export function PlanningWorkspacePanel({
     }
   };
 
-  const handleTitleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+  const handleTitleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (!focusNode) {
       return;
     }
@@ -1680,8 +1685,12 @@ export function PlanningWorkspacePanel({
             )}
           </span>
           <h2 className="planning-panel-title" id="planning-panel-heading">
-            {workspaceName} tree
+            {workspaceName} week
           </h2>
+        </div>
+        <div className="planning-view-switch" role="group" aria-label="Floating workspace panels">
+          <button type="button" aria-expanded={repositoryOpen} aria-controls="floating-task-repository" onClick={() => setRepositoryOpen(value => !value)}><ListTree size={14} aria-hidden="true" />Tree</button>
+          <button type="button" aria-label={isCalendarOpen ? 'Hide calendar panel' : 'Show calendar panel'} aria-expanded={isCalendarOpen} onClick={onCalendarToggle}><CalendarDays size={14} aria-hidden="true" />Calendar</button>
         </div>
         {!isAllWorkspace && activeCategory ? (
           <div className="planning-panel-workspace-menu-anchor" ref={workspaceMenuRef}>
@@ -1727,8 +1736,14 @@ export function PlanningWorkspacePanel({
         ) : null}
       </header>
 
-      <div className="planning-panel-body no-brief">
-          <article className="planning-surface planning-tree-surface">
+      <div className={`planning-panel-body no-brief is-week-view${repositoryOpen ? ' has-repository' : ''}`}>
+          <div className="planning-week-surface">
+            <WeeklyPlanningBoard nodes={[...activeNodes, ...backlogNodes]} categoryById={categoryById}
+              isLoading={isNodesLoading} focusedDay={planningDay} onFocusDay={onPlanningDayChange}
+              onAddTask={onAddPlannedTask} onOpenTask={handleOpenBrief} onStatusChange={onStatusChange} />
+          </div>
+          <article id="floating-task-repository" className="planning-surface planning-tree-surface floating-task-repository" hidden={!repositoryOpen} aria-label="Task repository">
+            <header className="floating-repository-header"><h3>{workspaceName} tree</h3><button type="button" aria-label="Hide task repository" onClick={() => setRepositoryOpen(false)}><X size={16} aria-hidden="true" /></button></header>
             <div className="planning-tree-controls">
               <div className="planning-tree-search-row">
                 <label className="planning-tree-search-shell">
@@ -1929,6 +1944,7 @@ export function PlanningWorkspacePanel({
                 pointerDragState ? ' is-pointer-dragging' : ''
               }`}
               ref={treeScrollRef}
+              onClickCapture={event => { if (Date.now() < suppressClickUntilRef.current) { event.preventDefault(); event.stopPropagation(); } }}
               onScroll={handleTreeScroll}
               role="tree"
               aria-label={`${workspaceName} task nodes`}
@@ -1970,8 +1986,8 @@ export function PlanningWorkspacePanel({
                         }
                       }}
                       style={{
-                        height: `${TREE_ROW_HEIGHT}px`,
-                        transform: `translateY(${index * TREE_ROW_HEIGHT}px)`,
+                        height: `${rowLayout[index].height}px`,
+                        transform: `translateY(${rowLayout[index].top}px)`,
                       }}
                     >
                     {row.kind === 'empty' && (
@@ -2053,12 +2069,11 @@ export function PlanningWorkspacePanel({
                             : workspaceAccentColor
                         }
                         workspaceLabel={
-                          isAllWorkspace
-                            ? categoryById.get(row.node.categoryId)?.name
-                            : undefined
+                          categoryById.get(row.node.categoryId)?.name
                         }
                         depth={row.depth}
                         continuationDepths={row.continuationDepths}
+                        hasNextSibling={row.hasNextSibling}
                         childVisibility={row.lane}
                         pendingFocusNodeId={pendingFocusNodeId}
                         onAutoFocusHandled={onAutoFocusHandled}
@@ -2094,6 +2109,7 @@ export function PlanningWorkspacePanel({
                 })}
               </div>
 
+              {pointerDragState && <div data-tree-root-drop className={`tree-root-drop${pointerDropTarget?.root ? ' is-active' : ''}`}>Move to top level</div>}
               {pointerDragState && (
                 <div
                   ref={pointerDragPreviewRef}
@@ -2114,24 +2130,18 @@ export function PlanningWorkspacePanel({
       </div>
 
       {focusNode && (
-        <div
-          className="planning-detail-modal-backdrop"
-          role="presentation"
-          onClick={() => setOpenBriefNodeId(null)}
-        >
+        <TaskPageDialog onClose={() => setOpenBriefNodeId(null)}>
+
           <article
             className="planning-surface planning-detail-surface planning-detail-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="planning-detail-modal-title"
             onClick={(event) => event.stopPropagation()}
           >
             <div className="planning-surface-header">
               <div>
-                <p className="planning-detail-breadcrumb">Task page</p>
-                <input
+                <textarea
                   id="planning-detail-modal-title"
-                  type="text"
+                  rows={1}
+                  ref={element => { if (element) { element.style.height = 'auto'; element.style.height = `${element.scrollHeight}px`; } }}
                   className="planning-detail-title-input"
                   value={currentTitleDraft}
                   onChange={(event) =>
@@ -2153,7 +2163,7 @@ export function PlanningWorkspacePanel({
                 aria-label="Close task page"
                 title="Close"
               >
-                x
+                <X size={22} />
               </button>
             </div>
 
@@ -2232,13 +2242,6 @@ export function PlanningWorkspacePanel({
 
               <div className="planning-detail-grid">
                 <section className="planning-detail-brief">
-                  <div className="planning-detail-meta">
-                    <span>{formatDeadline(focusNode.deadlineAt)}</span>
-                    <span>{formatTime(focusNode.timeEstimateMinutes)}</span>
-                    <span>{focusNode.children.length} subtasks</span>
-                    <span>{formatStatus(focusNode.status)}</span>
-                  </div>
-
                   {focusChecklist.length > 0 && (
                     <div className="planning-checklist">
                       <p className="planning-checklist-title">Definition of done</p>
@@ -2260,6 +2263,15 @@ export function PlanningWorkspacePanel({
                   <div>
                     <dt>Status</dt>
                     <dd>{formatStatus(focusNode.status)}</dd>
+                  </div>
+                  <div>
+                    <dt>Planned day</dt>
+                    <dd className="planning-detail-field-group">
+                      <input type="date" className="planning-detail-date-input" value={focusNode.plannedDate ?? ''}
+                        aria-label="Task planned day" onChange={event => void updateNode(focusNode.id, { plannedDate: event.target.value || null })} />
+                      {focusNode.plannedDate && <button type="button" className="planning-detail-inline-btn subtle"
+                        onClick={() => void updateNode(focusNode.id, { plannedDate: null })}>Clear</button>}
+                    </dd>
                   </div>
                   <div>
                     <dt>Deadline</dt>
@@ -2433,7 +2445,8 @@ export function PlanningWorkspacePanel({
               </section>
             </div>
           </article>
-        </div>
+          {isRecurrenceDialogOpen && <Suspense fallback={null}><RecurrenceRuleDialog node={focusNode} onClose={() => setIsRecurrenceDialogOpen(false)} /></Suspense>}
+        </TaskPageDialog>
       )}
       {workspaceDialog && createPortal(
         <div
@@ -2591,15 +2604,7 @@ export function PlanningWorkspacePanel({
         </div>,
         document.body,
       )}
-      {focusNode && isRecurrenceDialogOpen && createPortal(
-        <Suspense fallback={null}>
-          <RecurrenceRuleDialog
-            node={focusNode}
-            onClose={() => setIsRecurrenceDialogOpen(false)}
-          />
-        </Suspense>,
-        document.body,
-      )}
+
     </section>
   );
 }

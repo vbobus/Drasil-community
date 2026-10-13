@@ -26,6 +26,7 @@ from app.models.category import Category
 from app.models.node import StrategyNode
 from app.services.agent_kernel.core_contract import render_core_operating_instructions
 from app.services.agent_kernel.codex_app_server import DIRECT_DYNAMIC_TOOL_NAMES
+from app.services.agent_kernel.agent_observability import observe_generation
 from app.services.agent_kernel.provider_matrix import (
     UnsupportedProviderModel,
     UnsupportedReasoningEffort,
@@ -198,6 +199,11 @@ def codex_native_tool_loop_enabled() -> bool:
 
 
 def ensure_codex_login(codex_path: str) -> None:
+    from app.services.codex_sandbox import enabled, get_status
+    if enabled():
+        if not get_status().get("isAuthenticated"):
+            raise HTTPException(401, "Connect ChatGPT in Settings → Connections to use AI.")
+        return
     try:
         result = subprocess.run(
             [codex_path, "login", "status"],
@@ -454,6 +460,12 @@ def build_tool_loop_prompt(
         "estimates. Use schedule_groups when scheduled items have different windows. A successful "
         "proposal for one convenient target does not complete a compound request while another "
         "inventoried clause is still missing.\n"
+        "For a task added without a clock time, set planned_date to its requested day, "
+        "or the client local today when no day is given. This holds the task above the "
+        "calendar timeline without booking time. Do not invent a deadline or a timed block. "
+        "Use created_task_schedule only for an explicit time, time window, or request to "
+        "find/schedule time; an untimed planned day alone needs no scheduling call. "
+        "An explicit backlog or undated request may omit planned_date. "
         "If the user asks to create a new task without naming a parent, make it top-level. "
         "Honor an explicitly named category; otherwise choose the best available category "
         "from the category catalog using the task meaning and existing roots. Treat the active "
@@ -703,6 +715,12 @@ def build_native_tool_loop_prompt(
         "When creating subtasks in a multi-task context, choose the most specific "
         "intended parent from the transcript and tool evidence. Do not default to an "
         "ancestor/grandparent when the user names or corrects the direct parent.\n"
+        "For a task added without a clock time, set planned_date to its requested day, "
+        "or the client local today when no day is given. This holds the task above the "
+        "calendar timeline without booking time. Do not invent a deadline or a timed block. "
+        "Use created_task_schedule only for an explicit time, time window, or request to "
+        "find/schedule time; an untimed planned day alone needs no scheduling call. "
+        "An explicit backlog or undated request may omit planned_date. "
         "If the user asks to create a new task without naming a parent, make it top-level. "
         "Honor an explicitly named category; otherwise choose the best available category "
         "from the category catalog using the task meaning and existing roots. Treat the active "
@@ -852,6 +870,7 @@ def _compact_native_task(value: Any) -> dict[str, Any] | None:
             "title",
             "status",
             "priority",
+            "planned_date",
             "deadline_at",
             "deadline",
             "time_estimate_minutes",
@@ -1319,6 +1338,12 @@ def invoke_codex_json_schema(
     )
 
 
+@observe_generation(
+    name="codex.direct-response",
+    provider="codex-cli",
+    model_argument="configured_model",
+    prompt_argument="prompt",
+)
 def invoke_codex_direct_response(
     *,
     prompt: str,
@@ -1440,6 +1465,12 @@ def invoke_codex_structured_step(
         return parse_tool_step_payload(parsed), parse_codex_session_id(result.stdout or "", result.stderr or "") or provider_session_id
 
 
+@observe_generation(
+    name="codex.tool-loop",
+    provider="codex-cli",
+    model_argument="configured_model",
+    prompt_argument="prompt",
+)
 def invoke_codex_tool_loop(
     *,
     mode: str,
@@ -2113,12 +2144,22 @@ def extract_openai_output_text(response_payload: dict[str, Any]) -> str:
     return "".join(parts).strip()
 
 
+@observe_generation(
+    name="openai.responses",
+    provider="openai-api",
+    request_body_argument="request_body",
+)
 def call_openai_responses_api(
     *,
     api_key: str,
     request_body: dict[str, Any],
     timeout_seconds: int = 90,
 ) -> dict[str, Any]:
+    from app.services.agent_stream import check_cancelled, read_responses_stream
+    check_cancelled()
+    request_body = {**request_body, "stream": True}
+    if str(request_body.get("model", "")).startswith(("gpt-5", "gpt-6", "o3", "o4")):
+        request_body["reasoning"] = {"summary": "auto", **request_body.get("reasoning", {})}
     request = urllib.request.Request(
         "https://api.openai.com/v1/responses",
         data=json.dumps(request_body).encode("utf-8"),
@@ -2126,8 +2167,9 @@ def call_openai_responses_api(
         method="POST",
     )
     try:
-        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
-            return json.loads(response.read().decode("utf-8"))
+        from app.core.hosted_budget import remaining_timeout
+        with urllib.request.urlopen(request, timeout=remaining_timeout(timeout_seconds)) as response:
+            return read_responses_stream(response)
     except urllib.error.HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
         detail = body
@@ -2275,6 +2317,9 @@ def invoke_openai_tool_loop(
 
         tool_outputs: list[dict[str, Any]] = []
         for function_call in function_calls:
+            from app.services.agent_stream import emit_progress
+            from app.services.strategist_runs import _public_tool_activity
+            emit_progress("activity", _public_tool_activity(str(function_call.get("name", ""))))
             call_id = function_call.get("call_id")
             raw_arguments = function_call.get("arguments")
             tool_name = function_call.get("name")
@@ -2352,6 +2397,16 @@ def provider_transport_readiness(runtime_settings: dict[str, Any]) -> dict[str, 
         # Production settings always carry the explicit typed matrix decision.
         matrix_supported = True
     if provider == "codex-cli":
+        from app.services.codex_sandbox import enabled, get_status
+        if enabled():
+            auth_ready = bool(get_status().get("isAuthenticated"))
+            return {
+                "provider": provider, "checked": True, "passed": auth_ready,
+                "codex_cli_found": True, "auth_file_ready": auth_ready,
+                "model_matrix_supported": matrix_supported,
+                "model_matrix_error_code": matrix_error_code,
+                "source": "sandbox_subscription_preflight",
+            }
         codex_path = find_codex_cli_path()
         auth_ready = has_usable_codex_auth_file()
         return {

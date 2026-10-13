@@ -22,6 +22,7 @@ REQUIRED_FILES = {
     "README.md",
     "SECURITY.md",
     "compose.yaml",
+    "desktop/package.json",
     "backend/.env.example",
     "frontend/.env.example",
 }
@@ -31,6 +32,7 @@ BANNED_DIRECTORY_NAMES = {
     ".agents",
     ".codex",
     ".eval-artifacts",
+    ".impeccable",
     ".pytest_cache",
     ".ruff_cache",
     ".secrets",
@@ -45,6 +47,7 @@ BANNED_DIRECTORY_NAMES = {
     "evals",
     "htmlcov",
     "node_modules",
+    "out",
     "playwright-report",
     "scratch",
     "test-results",
@@ -57,6 +60,8 @@ BANNED_FILE_NAMES = {
     ".strategist-provider.json",
     "drasil_specification.md",
     "evals.json",
+    "auth.json",
+    "credentials.json",
     "private_extensions.py",
     "strategist_eval.py",
     "strategist_eval_fixture.py",
@@ -66,6 +71,8 @@ PRIVATE_EVALUATION_TEST_MARKERS = (
     "app.evals",
     "offline_shadow_evidence",
     "strategist_eval_fixture",
+    "unfinished_task_move.json",
+    "driving_appointment_tool_call.json",
 )
 
 BANNED_SUFFIXES = {
@@ -88,6 +95,11 @@ SECRET_PATTERNS = {
     "AWS access key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
     "Slack token": re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     "Stripe secret key": re.compile(r"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{20,}\b"),
+    "private deployment coordinates": re.compile(
+        r"\bdrasil-[a-z0-9]+\.vercel\.app|[a-z0-9]+-projects-[a-f0-9]{8,}|\bdpl_[A-Za-z0-9]{20,}\b",
+        re.IGNORECASE,
+    ),
+    "personal Windows home path": re.compile(r"[A-Z]:[/\\]Users[/\\](?!Public\b|example\b|test\b)[A-Za-z0-9_.-]+", re.IGNORECASE),
 }
 
 SENSITIVE_ENV_NAME = re.compile(
@@ -95,6 +107,7 @@ SENSITIVE_ENV_NAME = re.compile(
 )
 TEXT_FILE_SUFFIXES = {
     ".css",
+    ".cjs",
     ".html",
     ".js",
     ".json",
@@ -108,6 +121,7 @@ TEXT_FILE_SUFFIXES = {
     ".ts",
     ".tsx",
     ".txt",
+    ".webmanifest",
     ".yaml",
     ".yml",
 }
@@ -171,6 +185,8 @@ def verify_public_tree(root: Path) -> tuple[int, int]:
                 continue
             if lowered_name in BANNED_FILE_NAMES:
                 issues.append(f"private file present: {relative}")
+            if relative.casefold().startswith("backend/tests/fixtures/"):
+                issues.append(f"private incident fixture present: {relative}")
             if lowered_name == ".env" or (
                 lowered_name.startswith(".env.") and lowered_name != ".env.example"
             ):
@@ -187,6 +203,7 @@ def verify_public_tree(root: Path) -> tuple[int, int]:
             if path.suffix.casefold() not in TEXT_FILE_SUFFIXES and file_name not in {
                 ".dockerignore",
                 ".editorconfig",
+                ".env.example",
                 ".gitattributes",
                 ".gitignore",
                 "LICENSE",

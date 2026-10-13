@@ -8,13 +8,16 @@ and category data, with persisted chat sessions.
 import json
 import os
 import time
+import queue
+import threading
+from contextvars import copy_context
 from contextlib import nullcontext
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from datetime import date, datetime
 from typing import Any, List, Optional
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, alias_generators, field_validator, model_validator
 from sqlalchemy import update
@@ -29,7 +32,6 @@ from app.services.agent_kernel.contracts import ReviewDocument
 from app.services.principal_auth import require_authenticated_principal
 from app.services.account_auth import active_account, use_account
 from app.services.google_calendar import delete_google_event_by_id, try_sync_block_to_google
-from app.services.strategist_graph import bind_proposal_turn_ids, run_strategist_graph_turn
 from app.services.strategist_runs import (
     create_strategist_run,
     get_strategist_run,
@@ -54,6 +56,16 @@ from app.services.strategist_sessions import (
 
 router = APIRouter(prefix="/api/v1/ai", tags=["AI"])
 DEFAULT_STRATEGIST_CONTROL_PLANE = "agent-kernel"
+
+
+def bind_proposal_turn_ids(*args, **kwargs):
+    from app.services.strategist_graph import bind_proposal_turn_ids as bind
+    return bind(*args, **kwargs)
+
+
+def run_strategist_graph_turn(*args, **kwargs):
+    from app.services.strategist_graph import run_strategist_graph_turn as run
+    return run(*args, **kwargs)
 
 
 def _bounded_float_env(name: str, *, default: float, minimum: float, maximum: float) -> float:
@@ -380,6 +392,7 @@ class StrategistResponse(BaseModel):
     provider_label: str
     mode: str
     summary: str
+    reasoning_summary: Optional[str] = None
     context_cards: List[StrategistContextCard] = Field(default_factory=list)
     suggested_prompts: List[str] = Field(default_factory=list)
     task_references: List[StrategistTaskReference] = Field(default_factory=list)
@@ -745,6 +758,10 @@ def _execute_strategist_run_in_account(run_id: str) -> None:
                 },
             )
             record_prompt = str(turn_result.get("record_prompt") or run.prompt).strip()
+            from app.services.agent_stream import public_reasoning_summary
+            reasoning_summary = public_reasoning_summary()
+            if reasoning_summary:
+                turn_result["response"]["reasoningSummary"] = reasoning_summary
             if record_prompt and record_prompt != turn_record.prompt:
                 turn_record.prompt = record_prompt
             complete_strategist_turn(
@@ -808,7 +825,21 @@ def _execute_strategist_run_in_account(run_id: str) -> None:
                     else []
                 ),
             )
-            mark_strategist_run_completed(worker_session, run)
+            outcome = turn_result["response"].get("handoff_outcome") or turn_result["response"].get("handoffOutcome")
+            if (
+                isinstance(outcome, dict)
+                and outcome.get("status") == "repairable_internally"
+                and not (turn_result["response"].get("review_document") or turn_result["response"].get("reviewDocument"))
+            ):
+                # A returned assistant message is not proof that the requested
+                # work succeeded. Preserve its recovery payload but record the
+                # failed run truthfully for history, monitoring, and retries.
+                mark_strategist_run_failed(
+                    worker_session, run,
+                    error_text=str(outcome.get("message") or "The requested review could not be prepared."),
+                )
+            else:
+                mark_strategist_run_completed(worker_session, run)
         except HTTPException as error:
             worker_session.rollback()
             complete_strategist_turn(
@@ -819,6 +850,10 @@ def _execute_strategist_run_in_account(run_id: str) -> None:
                 error_text=str(error.detail),
             )
             mark_strategist_run_failed(worker_session, run, error_text=str(error.detail))
+            if error.status_code == 499:
+                run.status = "cancelled"
+                worker_session.add(run)
+                worker_session.commit()
         except Exception as error:
             worker_session.rollback()
             error_text = f"Strategist failed: {error}"
@@ -833,6 +868,19 @@ def _execute_strategist_run_in_account(run_id: str) -> None:
 
 
 def submit_strategist_run(run_id: str) -> Future[None]:
+    from app.db.hosted import hosted_runtime
+    if hosted_runtime():
+        # Vercel may freeze an instance as soon as its response ends. Keep all
+        # work inside the request; persisted run leases protect concurrent retries.
+        from app.core.hosted_budget import request_budget
+        future: Future[None] = Future()
+        try:
+            with request_budget():
+                execute_strategist_run(run_id, active_account(required=False))
+            future.set_result(None)
+        except Exception as error:
+            future.set_exception(error)
+        return future
     existing = IN_FLIGHT_STRATEGIST_RUNS.get(run_id)
     if existing is not None and not existing.done():
         return existing
@@ -862,12 +910,14 @@ def build_strategist_run_response_payload(
     session: Session,
     *,
     run_id: str,
+    ensure_active: bool = True,
 ) -> dict[str, Any]:
     session.expire_all()
     run = get_strategist_run(session, run_id)
     if run is None:
         raise HTTPException(status_code=404, detail="Strategist run not found.")
-    ensure_strategist_run_active(run.id, run.status)
+    if ensure_active:
+        ensure_strategist_run_active(run.id, run.status)
     strategist_session = get_strategist_session(session, run.session_id)
     turn_record = session.get(StrategistChatTurn, run.turn_id)
     if strategist_session is None or turn_record is None:
@@ -898,6 +948,56 @@ def encode_sse_event(event_name: str, payload: dict[str, Any]) -> str:
         f"event: {event_name}\n"
         f"data: {json.dumps(wire_payload, default=str)}\n\n"
     )
+
+
+def stream_strategist_run(run_id: str, account) -> StreamingResponse:
+    """Keep the worker and public progress inside one live HTTP response."""
+    from app.core.hosted_budget import request_budget
+    from app.db.hosted import hosted_runtime
+    from app.services.agent_stream import stream_progress
+
+    events: queue.Queue = queue.Queue(maxsize=2048)
+    cancelled = threading.Event()
+    context = copy_context()
+
+    def publish(event):
+        try:
+            events.put_nowait(event)
+        except queue.Full:
+            pass  # A slow client cannot grow memory; final state is durable.
+
+    def worker():
+        with request_budget() if hosted_runtime() else nullcontext(), stream_progress(publish, cancelled):
+            execute_strategist_run(run_id, account)
+
+    def stream():
+        with use_account(account), Session(get_active_engine()) as session:
+            initial = build_strategist_run_response_payload(session, run_id=run_id, ensure_active=False)
+        yield encode_sse_event("update", initial)
+        future = STRATEGIST_RUN_EXECUTOR.submit(context.run, worker)
+        try:
+            last_snapshot = time.monotonic()
+            while not future.done() or not events.empty():
+                try:
+                    event = events.get(timeout=0.25)
+                    yield f"event: progress\ndata: {json.dumps(event)}\n\n"
+                except queue.Empty:
+                    pass
+                if time.monotonic() - last_snapshot >= 2:
+                    with use_account(account), Session(get_active_engine()) as session:
+                        snapshot = build_strategist_run_response_payload(session, run_id=run_id, ensure_active=False)
+                    yield encode_sse_event("update", snapshot)
+                    last_snapshot = time.monotonic()
+            future.result()
+            with use_account(account), Session(get_active_engine()) as session:
+                result = build_strategist_run_response_payload(session, run_id=run_id, ensure_active=False)
+            yield encode_sse_event("done", result)
+        finally:
+            cancelled.set()
+
+    return StreamingResponse(stream(), media_type="text/event-stream", headers={
+        "Cache-Control": "no-store", "X-Accel-Buffering": "no",
+    })
 
 
 @router.get("/strategist/sessions", response_model=List[StrategistSessionSummary])
@@ -976,7 +1076,8 @@ def strategist_session_context(
 def run_strategist(
     body: StrategistRequest,
     session: Session = Depends(get_session),
-) -> dict[str, Any]:
+    request: Request = None,
+) -> Any:
     if (
         body.ui_event is not None
         and str(body.ui_event.kind or "").strip().lower() == "proposal_action"
@@ -1041,6 +1142,8 @@ def run_strategist(
             control_plane=body.control_plane
             or os.getenv("STRATEGIST_CONTROL_PLANE", DEFAULT_STRATEGIST_CONTROL_PLANE),
         )
+        if request is not None and "text/event-stream" in request.headers.get("accept", ""):
+            return stream_strategist_run(run.id, active_account(required=False))
         future = submit_strategist_run(run.id)
         try:
             future.result(timeout=strategist_foreground_wait_seconds())
@@ -1098,8 +1201,14 @@ def strategist_run_events(run_id: str) -> StreamingResponse:
     request_account = active_account(required=False)
 
     def event_stream():
-        with use_account(request_account):
-            yield from _event_stream_for_account()
+        iterator = _event_stream_for_account()
+        while True:
+            with use_account(request_account):
+                try:
+                    event = next(iterator)
+                except StopIteration:
+                    return
+            yield event
 
     def _event_stream_for_account():
         last_fingerprint: str | None = None

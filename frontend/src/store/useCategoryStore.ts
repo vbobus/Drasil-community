@@ -25,6 +25,8 @@ interface CategoryState {
 }
 
 interface CategoryActions {
+  hydrateCategories: (categories: Category[], selectedId?: number | null) => void;
+  reset: () => void;
   fetchCategories: () => Promise<void>;
   setActiveCategory: (category: Category) => void;
   addCategory: (name: string, iconSlug?: string) => Promise<void>;
@@ -42,6 +44,13 @@ export const useCategoryStore = create<CategoryStore>((set, get) => ({
   error: null,
 
   // --- Actions ---
+
+  reset: () => set({ categories: [], activeCategory: null, isLoading: false, error: null }),
+  hydrateCategories: (categories, selectedId) => {
+    const id = selectedId ?? get().activeCategory?.id;
+    set({ categories, activeCategory: categories.find(category => category.id === id) ?? categories[0] ?? null,
+      isLoading: false, error: null });
+  },
 
   fetchCategories: async () => {
     if (get().isLoading) {
@@ -79,6 +88,7 @@ export const useCategoryStore = create<CategoryStore>((set, get) => ({
   },
 
   setActiveCategory: (category) => {
+    performance.mark('drasil:category-switch-start');
     set({ activeCategory: category });
   },
 

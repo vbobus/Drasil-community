@@ -511,6 +511,8 @@ def _operation_after(operation: object) -> str:
             values.append(f"Status: {fields.status.replace('_', ' ').title()}")
         if fields.estimate_minutes:
             values.append(f"Estimate: {fields.estimate_minutes} minutes")
+        if fields.planned_date:
+            values.append(f"Planned day: {_format_date(fields.planned_date)} (no set time)")
         if fields.deadline_at:
             values.append(f"Deadline: {_format_date(fields.deadline_at.date())}")
         if fields.notes:
@@ -533,6 +535,8 @@ def _operation_after(operation: object) -> str:
             values.append(f"Status: {updates.status.replace('_', ' ').title()}")
         if getattr(updates, "estimate_minutes", None):
             values.append(f"Estimate: {updates.estimate_minutes} minutes")
+        if getattr(updates, "planned_date", None):
+            values.append(f"Planned day: {_format_date(updates.planned_date)} (no set time)")
         if getattr(updates, "deadline_at", None):
             values.append(f"Deadline: {_format_date(updates.deadline_at.date())}")
         if getattr(updates, "notes", None):
@@ -550,7 +554,7 @@ def _operation_after(operation: object) -> str:
                 else "Tags cleared"
             )
         if getattr(updates, "clear_fields", None):
-            labels = {"notes": "notes", "deadline_at": "deadline"}
+            labels = {"notes": "notes", "deadline_at": "deadline", "planned_date": "planned day"}
             values.extend(f"Clear {labels[item]}" for item in updates.clear_fields)
         return "; ".join(values) or "Task details updated"
     if kind == "task.move":

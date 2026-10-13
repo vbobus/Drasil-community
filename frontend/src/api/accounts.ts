@@ -7,6 +7,7 @@ export interface AccountStatus {
   needsBootstrap: boolean;
   authenticationRequired: boolean;
   supportsRemoteBackend: boolean;
+  cookieSessions?: boolean;
 }
 
 export interface AccountSession {

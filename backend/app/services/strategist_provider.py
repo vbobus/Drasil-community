@@ -103,6 +103,10 @@ def _parse_codex_model_catalog(payload: Any) -> list[dict[str, Any]]:
 
 def get_codex_model_catalog(*, force_refresh: bool = False) -> list[dict[str, Any]]:
     """Return the visible model inventory exposed by the authenticated Codex CLI."""
+    from app.db.hosted import hosted_runtime
+    if hosted_runtime():
+        from app.services.codex_sandbox import enabled
+        return _fallback_codex_model_catalog() if enabled() else []
     now = time.monotonic()
     codex_executable = find_codex_cli_path()
     executable_key = str(codex_executable or "").lower()
@@ -148,6 +152,10 @@ def _get_settings_path() -> Path:
 
 
 def _load_raw_settings() -> StoredProviderSettings:
+    from app.db.hosted import hosted_storage
+    if hosted_storage():
+        from app.services.private_settings import load_settings
+        return load_settings("provider")
     settings_path = _get_settings_path()
     if not settings_path.exists():
         return {}
@@ -161,11 +169,20 @@ def _load_raw_settings() -> StoredProviderSettings:
 
 
 def _write_raw_settings(settings: StoredProviderSettings) -> None:
+    from app.db.hosted import hosted_storage
+    if hosted_storage():
+        from app.services.private_settings import save_settings
+        save_settings("provider", settings)
+        return
     settings_path = _get_settings_path()
     settings_path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
 
 
 def _normalize_provider(value: str | None) -> ProviderId:
+    from app.db.hosted import hosted_runtime
+    from app.services.codex_sandbox import enabled
+    if hosted_runtime() and not enabled():
+        return "openai-api"
     if value in VALID_PROVIDER_IDS:
         return value  # type: ignore[return-value]
     return "codex-cli"
@@ -233,12 +250,16 @@ def get_effective_provider_settings() -> dict[str, Any]:
 
 
 def get_public_provider_settings(*, force_catalog_refresh: bool = False) -> dict[str, Any]:
+    from app.db.hosted import hosted_runtime
+    from app.services.codex_sandbox import enabled
     effective = get_effective_provider_settings()
     active_provider = effective["activeProvider"]
     model_catalog = get_codex_model_catalog(force_refresh=force_catalog_refresh)
 
     return {
         "activeProvider": active_provider,
+        "supportsChatGptLogin": not hosted_runtime() or enabled(),
+        "chatGptHosting": "sandbox" if enabled() else "local",
         "activeProviderLabel": (
             "ChatGPT login"
             if active_provider == "codex-cli"
@@ -263,6 +284,10 @@ def save_provider_settings(
     openai_model: str | None,
     clear_openai_api_key: bool,
 ) -> dict[str, Any]:
+    from app.db.hosted import hosted_runtime
+    from app.services.codex_sandbox import enabled
+    if hosted_runtime() and not enabled() and active_provider != "openai-api":
+        raise HTTPException(status_code=400, detail="Hosted Drasil uses an OpenAI API key. ChatGPT CLI login is available in local installations.")
     normalized_provider = _normalize_provider(active_provider)
     next_codex_model = _normalize_codex_model(codex_model) or ""
     next_codex_reasoning_effort = _normalize_codex_reasoning_effort(

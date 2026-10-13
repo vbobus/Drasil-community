@@ -38,6 +38,7 @@ from app.services.agent_kernel.recurrence_materialization import (
     DEFAULT_RECURRENCE_MATERIALIZATION_OCCURRENCES,
     recurrence_occurrence_dates,
 )
+from app.services.calendar_assignment import moved_planned_day
 
 
 class SimulationProjectionError(RuntimeError):
@@ -186,6 +187,7 @@ class ProjectedTask:
     priority_authoritative: bool = True
     status: str = "not_started"
     estimate_minutes: int | None = None
+    planned_date: date | None = None
     deadline_at: datetime | None = None
     source_operation_id: str | None = None
 
@@ -287,6 +289,7 @@ class SimulationWorld:
                     "priority": item.priority, "priorityAuthoritative": item.priority_authoritative,
                     "status": item.status,
                     "estimateMinutes": item.estimate_minutes,
+                    "plannedDate": item.planned_date.isoformat() if item.planned_date else None,
                     "deadlineAt": item.deadline_at.isoformat() if item.deadline_at else None,
                     "sourceOperationId": item.source_operation_id,
                 }
@@ -468,6 +471,7 @@ class SimulationSnapshotLoader:
                 notes=item.notes,
                 priority=item.priority, priority_authoritative=True,
                 status=semantic_status,
+                planned_date=date.fromisoformat(item.planned_date) if item.planned_date else None,
                 estimate_minutes=item.time_estimate_minutes,
                 deadline_at=_aware(deadline) if deadline else None,
             )
@@ -494,6 +498,8 @@ class SimulationSnapshotLoader:
             for item in exception_records
             if item.disposition == "overridden"
         }
+        from app.services.google_calendar import configured_calendar_time_zone
+        default_calendar_zone = configured_calendar_time_zone() if calendar_records else None
         for item in calendar_records:
             if item.id is None:
                 continue
@@ -514,15 +520,18 @@ class SimulationSnapshotLoader:
                 series_record is not None and series_record.strict
             )
             flexible = series_record is not None and not series_record.strict
+            calendar_zone = (
+                series_record.timezone if series_record else default_calendar_zone
+            )
             world.calendar_blocks[key] = ProjectedCalendarBlock(
                 ref=EntityRef(kind="calendar_block", entity_id=key, revision=item.revision),
                 task_ref=(task.ref if task else EntityRef(kind="task", entity_id=f"task:{item.task_id}")),
                 workspace_ref=EntityRef(kind="workspace", entity_id=f"workspace:{item.category_id}", revision=(categories[item.category_id].revision if item.category_id in categories else None)),
                 start_at=_aware_in_zone(
-                    item.start_at, series_record.timezone if series_record else None
+                    item.start_at, calendar_zone
                 ),
                 end_at=_aware_in_zone(
-                    item.end_at, series_record.timezone if series_record else None
+                    item.end_at, calendar_zone
                 ),
                 priority=task.priority if task else "medium",
                 priority_authoritative=task.priority_authoritative if task else False,
@@ -665,9 +674,15 @@ class SimulationSnapshotLoader:
             )
         now = datetime.now(timezone.utc)
         fingerprint = _fingerprint(payload)
+        required_entities = _change_set_entity_identities(change_set)
+        for operation in change_set.operations:
+            if operation.kind in {"calendar.move_block", "calendar.resize_block"}:
+                block = world.calendar_blocks.get(operation.block_ref.entity_id)
+                if block is not None:
+                    required_entities.add((block.task_ref.kind, block.task_ref.entity_id))
         facts = _bounded_snapshot_facts(
             facts,
-            required_entities=_change_set_entity_identities(change_set),
+            required_entities=required_entities,
         )
         return LoadedSimulationWorld(
             snapshot=SimulationSnapshot(
@@ -784,6 +799,7 @@ class ChangeSetProjector:
                 ),
                 status=operation.fields.status or "not_started",
                 estimate_minutes=operation.fields.estimate_minutes,
+                planned_date=operation.fields.planned_date,
                 deadline_at=operation.fields.deadline_at, source_operation_id=op_id,
             )
             return [ref]
@@ -892,13 +908,21 @@ class ChangeSetProjector:
             return [ref]
         if kind in {"calendar.move_block", "calendar.resize_block"}:
             item = self._require(world.calendar_blocks, operation.block_ref, op_id)
+            affected_refs = [item.ref]
+            target_start = operation.start_at or item.start_at
+            task = self._require(world.tasks, item.task_ref, op_id)
+            target_day = moved_planned_day(task.planned_date, item.start_at, target_start)
+            if target_day is not None:
+                task.planned_date = target_day
+                task.source_operation_id = op_id
+                affected_refs.append(task.ref)
             if kind == "calendar.move_block":
                 item.start_at, item.end_at = _aware(operation.start_at), _aware(operation.end_at)
             else:
                 item.start_at = _aware(operation.start_at) if operation.start_at else item.start_at
                 item.end_at = _aware(operation.end_at)
             item.source_operation_id = op_id
-            return [item.ref]
+            return affected_refs
         if kind == "calendar.split_block":
             original = self._require(world.calendar_blocks, operation.block_ref, op_id)
             if original.is_recurring or original.occurrence_ref is not None:

@@ -387,7 +387,7 @@
 .settings-auth-code {
   display: block;
   margin-top: 4px;
-  color: #142a52;
+  color: var(--color-text-primary);
   font-size: 1.2rem;
   letter-spacing: 0.08em;
 }
@@ -786,7 +786,7 @@
 .settings-auth-link {
   display: block;
   margin-top: 4px;
-  color: #183760;
+  color: var(--color-text-primary);
   font-size: 0.82rem;
   line-height: 1.45;
   overflow-wrap: anywhere;

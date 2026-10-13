@@ -1,5 +1,6 @@
-import { apiRequest } from './http';
+import { apiRequest, readJson } from './http';
 import { apiFetch } from './connection';
+import { readEventStream } from './eventStream';
 
 const BASE = '/api/v1/ai/strategist';
 
@@ -399,6 +400,7 @@ export interface StrategistResponse {
   providerLabel: string;
   mode: 'review' | 'metadata' | 'branch' | 'action' | 'schedule_patch' | 'preference_memory' | 'clarification' | string;
   summary: string;
+  reasoningSummary?: string | null;
   contextCards: StrategistContextCard[];
   suggestedPrompts: string[];
   taskReferences?: StrategistTaskReference[];
@@ -514,6 +516,11 @@ export async function fetchStrategistSessionDetail(
   return apiRequest<StrategistSessionDetail>(`${BASE}/sessions/${sessionId}`);
 }
 
+export interface StrategistProgress {
+  kind: 'reasoning' | 'answer' | 'activity';
+  text: string;
+}
+
 export async function requestStrategistAdvice(data: {
   prompt: string;
   sessionId?: string | null;
@@ -527,10 +534,15 @@ export async function requestStrategistAdvice(data: {
   calendarViewEnd?: string | null;
   localDateTime?: string | null;
   timeZone?: string | null;
+}, options?: {
+  signal?: AbortSignal;
+  onUpdate?: (result: StrategistRunResponse) => void;
+  onProgress?: (progress: StrategistProgress) => void;
 }): Promise<StrategistRunResponse> {
-  return apiRequest<StrategistRunResponse>(BASE, {
+  const response = await apiFetch(BASE, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    signal: options?.signal,
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
     body: JSON.stringify({
       prompt: data.prompt,
       sessionId: data.sessionId ?? null,
@@ -548,7 +560,26 @@ export async function requestStrategistAdvice(data: {
       timeZone: data.timeZone ?? null,
     }),
   });
-
+  if (!response.ok || !response.headers.get('content-type')?.includes('text/event-stream')) {
+    return readJson<StrategistRunResponse>(response);
+  }
+  let final: StrategistRunResponse | undefined;
+  await readEventStream(response, (name, payload) => {
+    if (name === 'update' || name === 'done') {
+      const result = payload as StrategistRunResponse;
+      options?.onUpdate?.(result);
+      if (name === 'done') final = result;
+    } else if (name === 'progress') {
+      const progress = payload as StrategistProgress;
+      if (['reasoning', 'answer', 'activity'].includes(progress.kind) && typeof progress.text === 'string') {
+        options?.onProgress?.(progress);
+      }
+    } else if (name === 'error') {
+      throw new Error('The AI response was interrupted. Open the saved chat to check its status.');
+    }
+  });
+  if (!final) throw new Error('The AI stream disconnected. Open the saved chat to check its status.');
+  return final;
 }
 
 export async function fetchStrategistRun(runId: string): Promise<StrategistRunResponse> {

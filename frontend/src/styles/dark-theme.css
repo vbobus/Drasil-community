@@ -22,20 +22,27 @@ html[data-theme='dark'] {
   --color-border-subtle: #273651;
   --color-border-strong: #3b4e70;
 
-  --color-cat-work: #818cf8;
-  --color-cat-work-tint: #1c2548;
-  --color-cat-health: #34d399;
-  --color-cat-health-tint: #123a34;
-  --color-cat-home: #fbbf24;
-  --color-cat-home-tint: #3d3018;
-  --color-cat-finance: #38bdf8;
-  --color-cat-finance-tint: #153448;
-  --color-cat-social: #f472b6;
-  --color-cat-social-tint: #42213a;
-  --color-cat-growth: #a78bfa;
-  --color-cat-growth-tint: #2e2450;
-  --color-cat-leisure: #2dd4bf;
-  --color-cat-leisure-tint: #123b3b;
+  --color-cat-work: #c5a16a;
+  --color-cat-work-tint: color-mix(in srgb, #c5a16a 15%, var(--color-bg-surface));
+  --color-cat-work-fill: #b59358;
+  --color-cat-health: #a9bca0;
+  --color-cat-health-tint: color-mix(in srgb, #a9bca0 15%, var(--color-bg-surface));
+  --color-cat-health-fill: #99ad90;
+  --color-cat-home: #c7a08c;
+  --color-cat-home-tint: color-mix(in srgb, #c7a08c 15%, var(--color-bg-surface));
+  --color-cat-home-fill: #bf9780;
+  --color-cat-finance: #a5b9c1;
+  --color-cat-finance-tint: color-mix(in srgb, #a5b9c1 15%, var(--color-bg-surface));
+  --color-cat-finance-fill: #93aab2;
+  --color-cat-social: #cba1ac;
+  --color-cat-social-tint: color-mix(in srgb, #cba1ac 15%, var(--color-bg-surface));
+  --color-cat-social-fill: #c19aa5;
+  --color-cat-growth: #b7aac9;
+  --color-cat-growth-tint: color-mix(in srgb, #b7aac9 15%, var(--color-bg-surface));
+  --color-cat-growth-fill: #aba0bc;
+  --color-cat-leisure: #9cbfb4;
+  --color-cat-leisure-tint: color-mix(in srgb, #9cbfb4 15%, var(--color-bg-surface));
+  --color-cat-leisure-fill: #93b5a8;
 
   --color-state-success: #34d399;
   --color-state-success-tint: #123a34;
@@ -334,7 +341,6 @@ html[data-theme='dark'] :is(
   .planning-surface,
   .selected-panel,
   .selected-surface,
-  .strategist-surface.is-embedded,
   .calendar-shell,
   .my-day-agenda
 ) {
@@ -362,7 +368,6 @@ html[data-theme='dark'] :is(
   .planning-ghost-btn,
   .planning-tree-icon-btn,
   .planning-detail-close-btn,
-  .strategist-header-btn,
   .calendar-today-btn,
   .calendar-nav-btn,
   .calendar-picker-btn,
@@ -381,7 +386,6 @@ html[data-theme='dark'] :is(
   .planning-tree-icon-btn:hover,
   .planning-tree-icon-btn.is-active,
   .planning-detail-close-btn:hover,
-  .strategist-header-btn:hover,
   .calendar-nav-btn:hover,
   .calendar-today-btn:hover,
   .calendar-picker-btn:hover,
@@ -636,7 +640,6 @@ html[data-theme='dark'] :is(
 
 /* Strategist chat and review documents */
 html[data-theme='dark'] :is(
-  .strategist-turn,
   .strategist-feedback,
   .strategist-decision-card,
   .strategist-action-card,
@@ -646,10 +649,6 @@ html[data-theme='dark'] :is(
   .strategist-preference-proposal-card,
   .strategist-preference-rule,
   .strategist-clarification-choice,
-  .strategist-composer,
-  .strategist-history-panel,
-  .strategist-history-item,
-  .strategist-input-shell,
   .strategist-schedule-preview-list li,
   .review-document-card,
   .review-document-block,
@@ -662,11 +661,6 @@ html[data-theme='dark'] :is(
   border-color: var(--color-border-subtle);
   background: var(--color-bg-elevated);
   color: var(--color-text-primary);
-}
-
-html[data-theme='dark'] .strategist-turn-user {
-  border-color: color-mix(in srgb, var(--color-cat-work) 34%, var(--color-border-subtle));
-  background: color-mix(in srgb, var(--color-cat-work) 16%, var(--color-bg-elevated));
 }
 
 html[data-theme='dark'] .strategist-turn-user p:last-child {
@@ -1448,3 +1442,16 @@ html[data-theme='dark'] *::-webkit-scrollbar-thumb {
 html[data-theme='dark'] *::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* The same soft category surface is used for timed and untimed tasks. */
+html[data-theme='dark'] .calendar-shell :is(.calendar-agenda-block, .calendar-grid-block) {
+  background: var(--block-fill); border-color: transparent; color: var(--color-calendar-ink); box-shadow: none;
+}
+html[data-theme='dark'] .calendar-shell :is(.calendar-agenda-block, .calendar-grid-block):hover { background: var(--block-fill); border-color: var(--color-calendar-ink); }
+html[data-theme='dark'] .calendar-shell :is(.calendar-block-title, .calendar-grid-block-title, .calendar-block-time, .calendar-grid-block-time, .calendar-block-meta, .calendar-block-continuation) { color: var(--color-calendar-ink); text-shadow: none; }
+html[data-theme='dark'] .day-task-holder .day-task-title { color: var(--color-calendar-ink); }
+html[data-theme='dark'] .task-composer textarea { background: transparent; }
+html[data-theme='dark'] .task-composer textarea::placeholder { color: var(--color-text-secondary); }
+html[data-theme='dark'] .task-composer :is(input, select) { color-scheme: dark; }
+html[data-theme='light'] .task-composer :is(input, select) { color-scheme: light; }
+html[data-theme='dark'] .calendar-axis-corner { color: var(--color-text-secondary); }

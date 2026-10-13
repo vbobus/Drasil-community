@@ -106,6 +106,7 @@ jobs:
         with:
           fetch-depth: 0
       - run: python scripts/verify_public_export.py .
+      - run: python scripts/test_public_export.py
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -117,3 +118,26 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - run: docker build --tag drasil:ci .
+
+  windows-desktop:
+    name: Windows desktop installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+        working-directory: desktop
+      - run: node --check src/main.cjs
+        working-directory: desktop
+      - run: node --check src/preload.cjs
+        working-directory: desktop
+      - run: npm test
+        working-directory: desktop
+      - run: npm audit --omit=dev --audit-level=high
+        working-directory: desktop
+      - run: npm run make -- --platform=win32 --arch=x64
+        working-directory: desktop

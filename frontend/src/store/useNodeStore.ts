@@ -26,10 +26,13 @@ interface NodeState {
 }
 
 interface NodeActions {
-  fetchNodes: (categoryId: number) => Promise<void>;
-  fetchAllNodes: (categoryIds: number[]) => Promise<void>;
-  addNode: (data: { title: string; categoryId: number; parentId?: string; notes?: string; priority?: NodePriority; nodeType?: NodeType; deadlineAt?: string | null; emoji?: string; tags?: string[]; imageAttachments?: StrategyNode['imageAttachments']; isPinned?: boolean }) => Promise<ApiNode>;
-  updateNode: (id: string, updates: { title?: string; notes?: string; status?: NodeStatus; priority?: NodePriority; deadlineAt?: string | null; timeEstimateMinutes?: number | null; emoji?: string; tags?: string[]; imageAttachments?: StrategyNode['imageAttachments']; isPinned?: boolean; isBacklog?: boolean; nodeType?: NodeType }) => Promise<void>;
+  hydrateNodes: (flat: ApiNode[], categoryIds: number[], activeCategoryId: number | null) => void;
+  reset: () => void;
+  setPlannedDayFromServer: (id: string, day: string | null) => void;
+  fetchNodes: (categoryId: number, options?: { force?: boolean }) => Promise<void>;
+  fetchAllNodes: (categoryIds: number[], options?: { force?: boolean }) => Promise<void>;
+  addNode: (data: { title: string; categoryId: number; parentId?: string; timeEstimateMinutes?: number | null; notes?: string; priority?: NodePriority; nodeType?: NodeType; plannedDate?: string | null; deadlineAt?: string | null; emoji?: string; tags?: string[]; imageAttachments?: StrategyNode['imageAttachments']; isPinned?: boolean }) => Promise<ApiNode>;
+  updateNode: (id: string, updates: { title?: string; notes?: string; status?: NodeStatus; priority?: NodePriority; plannedDate?: string | null; deadlineAt?: string | null; timeEstimateMinutes?: number | null; emoji?: string; tags?: string[]; imageAttachments?: StrategyNode['imageAttachments']; isPinned?: boolean; isBacklog?: boolean; nodeType?: NodeType }) => Promise<void>;
   updateNodeStatuses: (updates: Record<string, NodeStatus>) => Promise<void>;
   moveNode: (id: string, move: { parentId?: string | null; targetIndex: number; categoryId: number; isBacklog?: boolean }) => Promise<void>;
   deleteNode: (id: string) => Promise<void>;
@@ -46,6 +49,23 @@ interface NodeActions {
 type NodeStore = NodeState & NodeActions;
 
 let latestNodeLoadRequestId = 0;
+let nodeMutationRevision = 0;
+let nodeOwnerVersion = 0;
+let activeNodeWrites = 0;
+export function getNodeMutationRevision() { return nodeMutationRevision; }
+export function nodeHasPendingWrites() { return activeNodeWrites > 0; }
+function beginNodeWrite() {
+  nodeMutationRevision += 1;
+  activeNodeWrites += 1;
+  return nodeOwnerVersion;
+}
+function finishNodeWrite(owner: number) {
+  if (owner !== nodeOwnerVersion) return;
+  nodeMutationRevision += 1;
+  activeNodeWrites -= 1;
+}
+const categoryLoadedAt = new Map<number, number>();
+const CACHE_FRESH_MS = 60_000;
 
 function sanitizeNodeUpdates(
   updates: {
@@ -53,7 +73,7 @@ function sanitizeNodeUpdates(
     notes?: string;
     status?: NodeStatus;
     priority?: NodePriority;
-    deadlineAt?: string | null;
+    plannedDate?: string | null; deadlineAt?: string | null;
     timeEstimateMinutes?: number | null;
     emoji?: string;
     tags?: string[];
@@ -70,7 +90,7 @@ function sanitizeNodeUpdates(
       continue;
     }
 
-    if (value === null && key !== 'deadlineAt' && key !== 'timeEstimateMinutes') {
+    if (value === null && key !== 'plannedDate' && key !== 'deadlineAt' && key !== 'timeEstimateMinutes') {
       continue;
     }
 
@@ -360,6 +380,14 @@ function moveNodeInTree(
     move.isBacklog,
   );
 
+  // Root indices belong to a workspace, even when All combines many trees.
+  if (parentId === null) {
+    const remaining = removeNodeAtPath(nodes, sourcePath);
+    const destination = remaining.filter(node => node.categoryId === move.categoryId);
+    destination.splice(Math.max(0, Math.min(move.targetIndex, destination.length)), 0, movedNode);
+    return [...remaining.filter(node => node.categoryId !== move.categoryId), ...reindexSiblings(destination)];
+  }
+
   const sourceParentPath = sourcePath.slice(0, -1);
   if (targetParentPath && arePathsEqual(sourceParentPath, targetParentPath)) {
     const siblings = getSiblingsAtParentPath(nodes, sourceParentPath);
@@ -494,15 +522,49 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
   activeDragPayload: null,
   stagedNodeIds: [],
 
-  fetchNodes: async (categoryId) => {
+  reset: () => {
+    nodeOwnerVersion += 1;
+    nodeMutationRevision += 1;
+    activeNodeWrites = 0;
+    latestNodeLoadRequestId += 1;
+    categoryLoadedAt.clear();
+    set({ nodes: [], categoryNodeCache: {}, activeCategoryId: null, isLoading: false,
+      error: null, stagedNodeIds: [], activeDragPayload: null, pendingFocusNodeId: null });
+  },
+
+  hydrateNodes: (flat, categoryIds, activeCategoryId) => {
+    latestNodeLoadRequestId += 1;
+    const categoryNodeCache = Object.fromEntries(categoryIds.map(id => {
+      categoryLoadedAt.set(id, Date.now());
+      return [id, buildTree(flat.filter(node => node.categoryId === id))];
+    }));
+    set({ categoryNodeCache, activeCategoryId, isLoading: false, error: null,
+      nodes: activeCategoryId === null ? Object.values(categoryNodeCache).flat() : categoryNodeCache[activeCategoryId] ?? [] });
+  },
+
+  setPlannedDayFromServer: (id, day) => {
+    nodeMutationRevision += 1;
+    latestNodeLoadRequestId += 1;
+    const apply = (nodes: StrategyNode[]): StrategyNode[] => nodes.map(node => ({
+      ...node, ...(node.id === id ? { plannedDate: day, isBacklog: false } : {}), children: apply(node.children),
+    }));
+    set(state => ({ isLoading: false, nodes: apply(state.nodes), categoryNodeCache: Object.fromEntries(
+      Object.entries(state.categoryNodeCache).map(([key, nodes]) => [key, apply(nodes)]),
+    ) }));
+  },
+
+  fetchNodes: async (categoryId, options) => {
     const requestId = ++latestNodeLoadRequestId;
-    set({ isLoading: true, error: null });
+    const cached = get().categoryNodeCache[categoryId];
+    set({ nodes: cached ?? [], activeCategoryId: categoryId, isLoading: cached === undefined, error: null });
+    if (options?.force === false && cached !== undefined && Date.now() - (categoryLoadedAt.get(categoryId) ?? 0) < CACHE_FRESH_MS) return;
     try {
       const flat = await nodesApi.fetchNodes(categoryId);
       const tree = buildTree(flat);
       if (requestId !== latestNodeLoadRequestId) {
         return;
       }
+      categoryLoadedAt.set(categoryId, Date.now());
       set((state) => ({
         categoryNodeCache: {
           ...state.categoryNodeCache,
@@ -519,9 +581,12 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
     }
   },
 
-  fetchAllNodes: async (categoryIds) => {
+  fetchAllNodes: async (categoryIds, options) => {
     const requestId = ++latestNodeLoadRequestId;
-    set({ isLoading: true, error: null });
+    const cache = get().categoryNodeCache;
+    const complete = categoryIds.every(id => cache[id] !== undefined);
+    set({ nodes: categoryIds.flatMap(id => cache[id] ?? []), activeCategoryId: null, isLoading: !complete, error: null });
+    if (options?.force === false && complete && categoryIds.every(id => Date.now() - (categoryLoadedAt.get(id) ?? 0) < CACHE_FRESH_MS)) return;
 
     if (categoryIds.length === 0) {
       set({
@@ -537,7 +602,15 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
       const loadedCategories = await Promise.all(
         categoryIds.map(async (categoryId) => {
           const flat = await nodesApi.fetchNodes(categoryId);
-          return [categoryId, buildTree(flat)] as const;
+          const tree = buildTree(flat);
+          if (requestId === latestNodeLoadRequestId) {
+            categoryLoadedAt.set(categoryId, Date.now());
+            set(state => {
+              const categoryNodeCache = { ...state.categoryNodeCache, [categoryId]: tree };
+              return { categoryNodeCache, nodes: categoryIds.flatMap(id => categoryNodeCache[id] ?? []), isLoading: false };
+            });
+          }
+          return [categoryId, tree] as const;
         }),
       );
       if (requestId !== latestNodeLoadRequestId) {
@@ -562,6 +635,9 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
   },
 
   addNode: async (data) => {
+    const owner = beginNodeWrite();
+    latestNodeLoadRequestId += 1;
+    set({ isLoading: false });
     set({ error: null });
     const isAggregateView = get().activeCategoryId === null;
     try {
@@ -595,10 +671,15 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
       const message = error instanceof Error ? error.message : 'Failed to create node.';
       set({ error: message });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishNodeWrite(owner);
     }
   },
 
   updateNode: async (id, updates) => {
+    const owner = beginNodeWrite();
+    latestNodeLoadRequestId += 1;
+    set({ isLoading: false });
     if (get().error !== null) {
       set({ error: null });
     }
@@ -672,14 +753,19 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
         categoryNodeCache: previousCategoryNodeCache,
       });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishNodeWrite(owner);
     }
   },
 
   updateNodeStatuses: async (updates) => {
+    latestNodeLoadRequestId += 1;
+    set({ isLoading: false });
     const ids = Object.keys(updates);
     if (ids.length === 0) {
       return;
     }
+    const owner = beginNodeWrite();
 
     if (get().error !== null) {
       set({ error: null });
@@ -721,10 +807,15 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
         categoryNodeCache: previousCategoryNodeCache,
       });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishNodeWrite(owner);
     }
   },
 
   moveNode: async (id, move) => {
+    const owner = beginNodeWrite();
+    latestNodeLoadRequestId += 1;
+    set({ isLoading: false });
     set({ error: null });
     const previousNodes = get().nodes;
     const previousCategoryNodeCache = get().categoryNodeCache;
@@ -732,13 +823,18 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
 
     try {
       if (nextNodes) {
-        set((state) => ({
-          nodes: nextNodes,
-          categoryNodeCache: {
-            ...state.categoryNodeCache,
-            [move.categoryId]: nextNodes,
-          },
-        }));
+        set((state) => {
+          const cache = { ...state.categoryNodeCache };
+          const affectedCategories = new Set(previousNodes.map(node => node.categoryId));
+          affectedCategories.add(move.categoryId);
+          for (const categoryId of affectedCategories) {
+            cache[categoryId] = reindexSiblings(nextNodes.filter(node => node.categoryId === categoryId));
+          }
+          return {
+            nodes: state.activeCategoryId === null ? Object.values(cache).flat() : cache[state.activeCategoryId] ?? [],
+            categoryNodeCache: cache,
+          };
+        });
       }
 
       await nodesApi.moveNode(id, move);
@@ -750,10 +846,15 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
         categoryNodeCache: previousCategoryNodeCache,
       });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishNodeWrite(owner);
     }
   },
 
   deleteNode: async (id) => {
+    const owner = beginNodeWrite();
+    latestNodeLoadRequestId += 1;
+    set({ isLoading: false });
     set({ error: null });
     try {
       await nodesApi.deleteNode(id);
@@ -786,6 +887,8 @@ export const useNodeStore = create<NodeStore>((set, get) => ({
       const message = error instanceof Error ? error.message : 'Failed to delete node.';
       set({ error: message });
       throw error instanceof Error ? error : new Error(message);
+    } finally {
+      finishNodeWrite(owner);
     }
   },
 

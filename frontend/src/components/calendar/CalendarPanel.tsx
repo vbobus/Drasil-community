@@ -1,14 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SharedCalendarCanvas } from './SharedCalendarCanvas';
 import { useCalendarStore } from '../../store/useCalendarStore';
+import { useWorkspaceStore } from '../../store/useWorkspaceStore';
+import { useNodeStore } from '../../store/useNodeStore';
+import { isActiveTreeNode } from '../../lib/nodeState';
 import { suggestEmoji } from '../../lib/emoji';
+import { localDayKey } from '../../lib/weekPlanning';
 import type { NodeDragPayload, StrategyNode } from '../../types/node';
 import type { CalendarBlock, CalendarBlockChild, CalendarViewMode } from '../../types/calendar';
 
 interface CalendarPanelProps {
   accentColor: string;
   headingId: string;
+  focusedDay?: string | null;
+  onFocusedDayChange?: (day: string | null) => void;
   taskLookup: Map<string, StrategyNode>;
+  onAddTask: (day: string) => void;
   onTaskStatusChange: (id: string, done: boolean) => void;
   onTaskFocus: (taskId: string, categoryId: number) => void;
   onRegisterPointerDrop: (handler: CalendarPointerDropHandler | null) => void;
@@ -160,13 +167,19 @@ function isPreviewProposalBlock(block: CalendarBlock) {
 export function CalendarPanel({
   accentColor,
   headingId,
+  focusedDay,
+  onFocusedDayChange,
   taskLookup,
+  onAddTask,
   onTaskStatusChange,
   onTaskFocus,
   onRegisterPointerDrop,
 }: CalendarPanelProps) {
-  const [visibleDate, setVisibleDate] = useState(() => startOfLocalDay(new Date()));
+  const [calendarDate, setVisibleDate] = useState(() => startOfLocalDay(new Date()));
+  const visibleDate = useMemo(() => focusedDay ? dateFromLocalKey(focusedDay) ?? calendarDate : calendarDate, [focusedDay, calendarDate]);
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const updateNode = useNodeStore(state => state.updateNode);
+  const dayTasks = useMemo(() => Array.from(taskLookup.values()).filter(task => task.plannedDate && task.status !== 'done' && isActiveTreeNode(task)), [taskLookup]);
   const blocks = useCalendarStore((state) => state.blocks);
   const draftBlocks = useCalendarStore((state) => state.draftBlocks);
   const viewMode = useCalendarStore((state) => state.viewMode);
@@ -174,6 +187,7 @@ export function CalendarPanel({
   const isLoading = useCalendarStore((state) => state.isLoading);
   const error = useCalendarStore((state) => state.error);
   const fetchBlocks = useCalendarStore((state) => state.fetchBlocks);
+  const workspaceUsable = useWorkspaceStore(state => state.ready || state.legacy);
   const createManualBlock = useCalendarStore((state) => state.createManualBlock);
   const updateBlockTime = useCalendarStore((state) => state.updateBlockTime);
   const deleteBlock = useCalendarStore((state) => state.deleteBlock);
@@ -206,8 +220,9 @@ export function CalendarPanel({
   );
 
   useEffect(() => {
-    void fetchBlocks(visibleRange.startAt, visibleRange.endAt);
-  }, [fetchBlocks, visibleRange.endAt, visibleRange.startAt]);
+    if (!workspaceUsable) return;
+    void fetchBlocks(visibleRange.startAt, visibleRange.endAt, { force: false });
+  }, [fetchBlocks, visibleRange.endAt, visibleRange.startAt, workspaceUsable]);
 
   const schedulePayloadAt = useCallback(
     (payload: NodeDragPayload, clientX: number, clientY: number) => {
@@ -217,6 +232,11 @@ export function CalendarPanel({
         return false;
       }
 
+      const holder = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-day-holder]');
+      if (holder?.dataset.dayHolder) {
+        void updateNode(task.id, { plannedDate: holder.dataset.dayHolder }).catch(() => undefined);
+        return true;
+      }
       const startAt = resolveDropStartAt(visibleDate, viewMode, dropZone, clientX, clientY);
       const durationMinutes = task.timeEstimateMinutes ?? FALLBACK_DURATION_MINUTES;
       const endAt = addMinutes(startAt, durationMinutes);
@@ -229,7 +249,7 @@ export function CalendarPanel({
       }).catch(() => undefined);
       return true;
     },
-    [createManualBlock, taskLookup, viewMode, visibleDate],
+    [createManualBlock, taskLookup, updateNode, viewMode, visibleDate],
   );
 
   const handleNativeTaskDrop = useCallback(
@@ -262,6 +282,13 @@ export function CalendarPanel({
 
   const shiftVisibleDate = useCallback(
     (direction: -1 | 1) => {
+      if (focusedDay && onFocusedDayChange) {
+        const nextDate = new Date(visibleDate);
+        if (viewMode === 'month') nextDate.setMonth(nextDate.getMonth() + direction);
+        else nextDate.setDate(nextDate.getDate() + direction * (viewMode === 'week' ? 7 : 1));
+        onFocusedDayChange(localDayKey(nextDate));
+        return;
+      }
       setVisibleDate((current) => {
         const nextDate = new Date(current);
         if (viewMode === 'month') {
@@ -274,12 +301,13 @@ export function CalendarPanel({
         return startOfLocalDay(nextDate);
       });
     },
-    [viewMode],
+    [focusedDay, onFocusedDayChange, viewMode, visibleDate],
   );
 
   const handleToday = useCallback(() => {
+    if (focusedDay && onFocusedDayChange) onFocusedDayChange(localDayKey(new Date()));
     setVisibleDate(startOfLocalDay(new Date()));
-  }, []);
+  }, [focusedDay, onFocusedDayChange]);
 
   const handlePointerTaskDrop = useCallback<CalendarPointerDropHandler>(
     (payload, clientX, clientY) => {
@@ -288,7 +316,8 @@ export function CalendarPanel({
         return false;
       }
 
-      const isInside = isPointerInsideCalendarSurface(dropZone, clientX, clientY);
+      const holder = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>('[data-day-holder]');
+      const isInside = !!holder?.dataset.dayHolder || isPointerInsideCalendarSurface(dropZone, clientX, clientY);
       return isInside ? schedulePayloadAt(payload, clientX, clientY) : false;
     },
     [schedulePayloadAt],
@@ -306,7 +335,14 @@ export function CalendarPanel({
       accentColor={accentColor}
       headingId={headingId}
       blocks={enrichedBlocks}
+      dayTasks={dayTasks}
+      onAddTask={onAddTask}
+      onAssignDay={(id, day) => { if (taskLookup.has(id)) void updateNode(id, { plannedDate: day }).catch(() => undefined); }}
       visibleDate={visibleDate}
+      onDateSelect={date => {
+        setVisibleDate(startOfLocalDay(date));
+        onFocusedDayChange?.(localDayKey(date));
+      }}
       viewMode={viewMode}
       detailLevel={detailLevel}
       isLoading={isLoading}
@@ -322,6 +358,7 @@ export function CalendarPanel({
       onTaskDrop={handleNativeTaskDrop}
       onBlockTimeChange={handleBlockTimeChange}
       onBlockDelete={handleBlockDelete}
+      onBlockUnschedule={(block, day) => { if (!isPreviewProposalBlock(block)) void useCalendarStore.getState().unscheduleBlock(block.id, day).catch(() => undefined); }}
       onTaskStatusChange={onTaskStatusChange}
       onTaskFocus={onTaskFocus}
     />

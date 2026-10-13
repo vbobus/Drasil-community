@@ -6,7 +6,7 @@ import type { Category } from '../../types/category';
 import drasilLogoUrl from '../../assets/drasil-logo-transparent.png';
 import { WorkspaceIcon } from '../../lib/workspaceIcons';
 import { workspaceIconOptions } from '../../lib/workspaceIconOptions';
-import { Layers3 } from 'lucide-react';
+import { Layers3, Sprout, X } from 'lucide-react';
 import { LogOut } from 'lucide-react';
 import { useDrasilAccount } from '../account/AccountContext';
 import './AppSidebar.css';
@@ -24,6 +24,12 @@ const utilityDestinations: UtilityDestination[] = [
     label: 'My Day',
     icon: '\u263c',
     description: 'A focused daily queue built from selected and scheduled work.',
+  },
+  {
+    id: 'habits',
+    label: 'Habits',
+    icon: 'sprout',
+    description: 'Daily check-ins, streaks, and rewards for showing up.',
   },
   {
     id: 'inbox',
@@ -70,11 +76,15 @@ function DrasilWordmark() {
 interface AppSidebarProps {
   isCollapsed: boolean;
   onToggleCollapse: () => void;
+  isMobile?: boolean;
+  onNavigate?: () => void;
 }
 
 export function AppSidebar({
   isCollapsed,
   onToggleCollapse,
+  isMobile = false,
+  onNavigate,
 }: AppSidebarProps) {
   const {
     categories,
@@ -101,11 +111,13 @@ export function AppSidebar({
   }, [iconSearch]);
 
   const handleCategorySelect = (category: Category) => {
+    onNavigate?.();
     setActiveCategory(category);
     setActiveDestination('category');
   };
 
   const handleUtilitySelect = (destination: UtilityDestination['id']) => {
+    onNavigate?.();
     setActiveDestination(destination);
   };
 
@@ -147,7 +159,7 @@ export function AppSidebar({
           aria-label={isCollapsed ? 'Expand sidebar' : 'Drasil workspace'}
           aria-expanded={isCollapsed ? false : undefined}
           title={isCollapsed ? 'Expand sidebar' : 'Drasil'}
-          onClick={isCollapsed ? onToggleCollapse : () => setActiveDestination('category')}
+          onClick={isCollapsed ? onToggleCollapse : () => { onNavigate?.(); setActiveDestination('category'); }}
         >
           {isCollapsed ? (
             <img src={drasilLogoUrl} alt="" className="sidebar-logo-img" />
@@ -161,11 +173,11 @@ export function AppSidebar({
             type="button"
             className="sidebar-header-toggle"
             onClick={onToggleCollapse}
-            aria-label="Collapse sidebar"
+            aria-label={isMobile ? 'Close navigation' : 'Collapse sidebar'}
             aria-expanded
-            title="Collapse sidebar"
+            title={isMobile ? 'Close navigation' : 'Collapse sidebar'}
           >
-            <SidebarCollapseArrow />
+            {isMobile ? <X size={22} aria-hidden="true" /> : <SidebarCollapseArrow />}
           </button>
         )}
       </div>
@@ -186,7 +198,7 @@ export function AppSidebar({
               <button
                 type="button"
                 className="sidebar-item-main"
-                onClick={() => setActiveDestination('all')}
+                onClick={() => { onNavigate?.(); setActiveDestination('all'); }}
                 aria-current={activeDestination === 'all' ? 'page' : undefined}
                 aria-label={`All workspace${activeDestination === 'all' ? ' (active)' : ''}`}
                 title={isCollapsed ? 'All' : 'Tasks from every workspace'}
@@ -263,7 +275,7 @@ export function AppSidebar({
                   title={isCollapsed ? destination.label : destination.description}
                 >
                   <span className="sidebar-item-badge" aria-hidden="true">
-                    {destination.icon}
+                    {destination.id === 'habits' ? <Sprout size={18} strokeWidth={1.8} /> : destination.icon}
                   </span>
                   {!isCollapsed && <span className="sidebar-item-label">{destination.label}</span>}
                 </button>
@@ -275,6 +287,7 @@ export function AppSidebar({
               target="_blank"
               rel="noopener noreferrer"
               aria-label="Open agent architecture in a new tab"
+              onClick={onNavigate}
               title={isCollapsed
                 ? 'Agent architecture'
                 : 'Temporary admin utility. Opens the live agent debugger in a new tab.'}
@@ -363,7 +376,7 @@ export function AppSidebar({
         <button
           type="button"
           className="sidebar-account-switch"
-          onClick={openAccountSwitcher}
+          onClick={() => { onNavigate?.(); openAccountSwitcher(); }}
           title={`Switch account (signed in as ${account.displayName})`}
           aria-label={`Switch account. Signed in as ${account.displayName}`}
         >
@@ -381,7 +394,7 @@ export function AppSidebar({
           <button
             type="button"
             className="sidebar-account-logout"
-            onClick={() => void signOut()}
+            onClick={() => { onNavigate?.(); void signOut(); }}
             title="Sign out"
             aria-label="Sign out"
           >

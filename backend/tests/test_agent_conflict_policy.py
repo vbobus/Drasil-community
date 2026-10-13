@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
+from unittest.mock import patch
 
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -54,6 +55,11 @@ def draft(start_hour: int = 9, start_minute: int = 30, duration_minutes: int = 6
 
 class AgentConflictPolicyTests(unittest.TestCase):
     def setUp(self) -> None:
+        # This fixture's offset-free rows are UTC wall times, independent of
+        # the developer account's saved calendar timezone.
+        zone = patch('app.services.google_calendar.configured_calendar_time_zone', return_value='UTC')
+        zone.start()
+        self.addCleanup(zone.stop)
         self.engine = create_engine("sqlite://", connect_args={"check_same_thread": False})
         SQLModel.metadata.create_all(self.engine)
         with Session(self.engine) as session:

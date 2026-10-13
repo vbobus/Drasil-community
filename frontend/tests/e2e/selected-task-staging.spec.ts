@@ -95,6 +95,7 @@ test.describe('Story 2.1 - Selected task cards and estimate rollups', () => {
       .getByRole('button', { name: /select follow up with vendors for execution staging/i })
       .click();
 
+    await page.getByRole('button', { name: 'Open chat', exact: true }).click();
     await page.getByRole('tab', { name: /Selected tasks/i }).click();
     const selectedPanel = page.getByRole('region', { name: /^Selected tasks$/i });
     const selectedRootTitles = selectedPanel.locator('.selected-stage-root-title');

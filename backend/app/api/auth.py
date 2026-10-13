@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException
+from app.db.hosted import hosted_runtime
 from pydantic import BaseModel, ConfigDict, alias_generators
 
-from app.services.codex_auth import get_auth_status, logout_codex, start_device_auth
+from app.services.codex_auth import get_auth_status, logout_codex, start_browser_auth
 from app.services.strategist_provider import get_public_provider_settings, save_provider_settings
 
 router = APIRouter(prefix="/api/v1/auth", tags=["Auth"])
@@ -23,6 +24,9 @@ class StrategistProviderUpdateRequest(BaseModel):
 
 @router.get("/chatgpt")
 def chatgpt_auth_status() -> dict:
+    if hosted_runtime():
+        from app.services.codex_sandbox import enabled, get_status, disconnected
+        return get_status() if enabled() else disconnected()
     try:
         return get_auth_status()
     except HTTPException:
@@ -36,8 +40,11 @@ def chatgpt_auth_status() -> dict:
 
 @router.post("/chatgpt/start")
 def chatgpt_auth_start() -> dict:
+    if hosted_runtime():
+        from app.services.codex_sandbox import start_login
+        return start_login()
     try:
-        return start_device_auth()
+        return start_browser_auth()
     except HTTPException:
         raise
     except Exception as error:
@@ -49,6 +56,9 @@ def chatgpt_auth_start() -> dict:
 
 @router.post("/chatgpt/logout")
 def chatgpt_auth_logout() -> dict:
+    if hosted_runtime():
+        from app.services.codex_sandbox import logout
+        return logout()
     try:
         return logout_codex()
     except HTTPException:

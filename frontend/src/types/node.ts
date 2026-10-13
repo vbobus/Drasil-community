@@ -43,7 +43,7 @@ export interface StrategyNode {
   type: NodeType;
   categoryId: number;
   parentId?: string | null;
-  deadlineAt?: string | null;
+  plannedDate?: string | null; deadlineAt?: string | null;
   timeEstimateMinutes?: number | null;
   emoji?: string | null;
   tags: string[];

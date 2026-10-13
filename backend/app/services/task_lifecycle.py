@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from sqlalchemy import func
+from sqlalchemy import func, update
 from sqlmodel import Session, select
 
 from app.models.calendar_block import CalendarBlock
@@ -79,7 +79,13 @@ def bootstrap_strategy_node_id_sequence(session: Session) -> StrategyNodeIdSeque
 
 def allocate_strategy_node_id(session: Session) -> int:
     """Reserve a never-reused task ID in the caller's transaction."""
-
+    if session.get_bind().dialect.name == "postgresql":
+        return int(session.exec(
+            update(StrategyNodeIdSequence)
+            .where(StrategyNodeIdSequence.id == 1)
+            .values(last_id=StrategyNodeIdSequence.last_id + 1)
+            .returning(StrategyNodeIdSequence.last_id)
+        ).one()[0])
     sequence = bootstrap_strategy_node_id_sequence(session)
     sequence.last_id += 1
     session.add(sequence)

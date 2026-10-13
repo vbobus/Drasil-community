@@ -7,9 +7,10 @@ Endpoints:
   POST /api/v1/calendar-blocks                      -> CalendarBlockRead
   PATCH /api/v1/calendar-blocks/{id}                -> CalendarBlockRead
   DELETE /api/v1/calendar-blocks/{id}               -> 204
+  POST /api/v1/calendar-blocks/{id}/unschedule       -> planned day and membership
 """
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -20,7 +21,8 @@ from app.db.database import get_session
 from app.models.calendar_block import CalendarBlock
 from app.models.category import Category
 from app.models.node import StrategyNode
-from app.models.recurrence_series import RecurrenceSeries
+from app.models.recurrence_series import RecurrenceOccurrenceException, RecurrenceSeries
+from app.services.calendar_assignment import moved_planned_day
 from app.services.google_calendar import delete_google_event_for_block, try_sync_block_to_google
 from app.services.recurring_schedules import materialize_active_recurrence_series
 
@@ -56,6 +58,7 @@ class CalendarBlockRead(BaseModel):
     completion_status: str
     task_status: str
     task_deadline_at: Optional[str] = None
+    task_planned_date: Optional[str] = None
     task_priority: Optional[str] = None
     time_estimate_minutes: Optional[int] = None
     is_pinned: bool
@@ -154,6 +157,7 @@ def block_to_read(
         completion_status=block.completion_status,
         task_status=task.status,
         task_deadline_at=task.deadline_at,
+        task_planned_date=task.planned_date,
         task_priority=task.priority,
         time_estimate_minutes=task.time_estimate_minutes,
         is_pinned=block.is_pinned,
@@ -306,6 +310,147 @@ def create_calendar_block(
     return block_to_read(block, task, category)
 
 
+class MoveTaskDayRequest(BaseModel):
+    model_config = ConfigDict(alias_generator=alias_generators.to_camel, populate_by_name=True)
+    task_id: int
+    source_date: date
+    target_date: date
+
+
+class RemoveTaskDayRequest(BaseModel):
+    model_config = ConfigDict(alias_generator=alias_generators.to_camel, populate_by_name=True)
+    task_id: int
+    planned_date: date
+
+
+@router.post("/remove-task-day")
+def remove_task_day(body: RemoveTaskDayRequest, session: Session = Depends(get_session)) -> dict:
+    """Remove a card's day assignment, preserving task identities and other days."""
+    task = session.get(StrategyNode, body.task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    nodes = session.exec(select(StrategyNode).where(StrategyNode.category_id == task.category_id)).all()
+    children: dict[int, list[int]] = {}
+    for node in nodes:
+        if node.parent_id is not None:
+            children.setdefault(node.parent_id, []).append(node.id)
+    ids, pending = set(), [task.id]
+    while pending:
+        node_id = pending.pop()
+        if node_id in ids:
+            continue
+        ids.add(node_id)
+        pending.extend(children.get(node_id, []))
+    members = session.exec(select(StrategyNode).where(StrategyNode.id.in_(ids)).order_by(StrategyNode.id).with_for_update()).all()
+    start = datetime.combine(body.planned_date, datetime.min.time())
+    end = start + timedelta(days=1)
+    blocks = session.exec(select(CalendarBlock).where(CalendarBlock.task_id.in_(ids))
+        .where(CalendarBlock.variant.in_(("scheduled", "protected")))
+        .where(CalendarBlock.start_at < end).where(CalendarBlock.end_at > start)
+        .order_by(CalendarBlock.id).with_for_update()).all()
+    # External deletion may commit connection metadata. Finish it before any local mutation.
+    for block in blocks:
+        if block.start_at >= start and block.end_at <= end:
+            if delete_google_event_for_block(session, block):
+                raise HTTPException(status_code=502, detail="Could not remove the linked calendar booking. Please retry.")
+    changed, removed = [], []
+    planned_dates = {}
+    for node in members:
+        if node.planned_date == body.planned_date.isoformat():
+            node.planned_date = None
+            planned_dates[str(node.id)] = None
+            session.add(node)
+    for block in blocks:
+        old_start, old_end = block.start_at, block.end_at
+        if old_start < start and old_end > end:
+            # Split a multiday booking around the removed day, retaining its earlier ID.
+            tail = CalendarBlock(task_id=block.task_id, category_id=block.category_id,
+                start_at=end, end_at=old_end, variant=block.variant,
+                completion_status=block.completion_status, is_pinned=block.is_pinned,
+                is_protected=block.is_protected)
+            session.add(tail)
+            changed.append(tail)
+            block.end_at = start
+        elif old_start < start:
+            block.end_at = start
+        elif old_end > end:
+            block.start_at = end
+        else:
+            removed.append(block.id)
+        if block.recurrence_series_id and block.recurrence_key:
+            key = f"{block.recurrence_series_id}:{block.recurrence_key}"
+            exception = session.get(RecurrenceOccurrenceException, key) or RecurrenceOccurrenceException(
+                id=key, series_id=block.recurrence_series_id, recurrence_key=block.recurrence_key, disposition="cancelled")
+            exception.disposition = "cancelled" if block.id in removed else "overridden"
+            exception.start_at = None if block.id in removed else block.start_at
+            exception.end_at = None if block.id in removed else block.end_at
+            exception.updated_at = datetime.utcnow()
+            session.add(exception)
+        if block.id in removed:
+            session.delete(block)
+        else:
+            session.add(block)
+            changed.append(block)
+    session.flush()
+    result = {"plannedDates": planned_dates, "removedBlockIds": removed,
+              "scheduledTaskIds": list_scheduled_task_ids(session)}
+    session.commit()
+    for block in changed:
+        session.refresh(block)
+        try_sync_block_to_google(session, block)
+    member_by_id = {node.id: node for node in members}
+    category = session.get(Category, task.category_id)
+    result["updatedBlocks"] = [block_to_read(block, member_by_id[block.task_id], category).model_dump(mode="json", by_alias=True) for block in changed]
+    return result
+
+
+@router.post("/move-task-day", response_model=List[CalendarBlockRead])
+def move_task_day(
+    body: MoveTaskDayRequest,
+    session: Session = Depends(get_session),
+) -> List[CalendarBlockRead]:
+    """Move the existing task and its source-day bookings in one transaction."""
+    task = session.exec(select(StrategyNode).where(StrategyNode.id == body.task_id).with_for_update()).first()
+    category = session.get(Category, task.category_id) if task else None
+    if not task or not category:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    start = datetime.combine(body.source_date, datetime.min.time())
+    blocks = session.exec(select(CalendarBlock)
+        .where(CalendarBlock.task_id == body.task_id)
+        .where(CalendarBlock.category_id == task.category_id)
+        .where(CalendarBlock.variant.in_(("scheduled", "protected")))
+        .where(CalendarBlock.start_at < start + timedelta(days=1))
+        .where(CalendarBlock.end_at > start)).all()
+    shift = body.target_date - body.source_date
+    if not shift:
+        return [block_to_read(block, task, category) for block in blocks]
+    if not blocks and task.planned_date != body.source_date.isoformat():
+        raise HTTPException(status_code=409, detail="The task has already moved. Refresh and try again.")
+    for block in blocks:
+        block.start_at += shift
+        block.end_at += shift
+        session.add(block)
+        if block.recurrence_series_id and block.recurrence_key:
+            exception_id = f"{block.recurrence_series_id}:{block.recurrence_key}"
+            exception = session.get(RecurrenceOccurrenceException, exception_id)
+            if exception is None:
+                exception = RecurrenceOccurrenceException(id=exception_id,
+                    series_id=block.recurrence_series_id, recurrence_key=block.recurrence_key,
+                    disposition="overridden")
+            exception.disposition = "overridden"
+            exception.start_at, exception.end_at = block.start_at, block.end_at
+            exception.updated_at = datetime.utcnow()
+            session.add(exception)
+    task.planned_date = body.target_date.isoformat()
+    task.is_backlog = False
+    session.add(task)
+    session.commit()
+    for block in blocks:
+        session.refresh(block)
+        try_sync_block_to_google(session, block)
+    return [block_to_read(block, task, category) for block in blocks]
+
+
 @router.patch("/{block_id}", response_model=CalendarBlockRead)
 def update_calendar_block(
     block_id: int,
@@ -327,14 +472,70 @@ def update_calendar_block(
             },
         )
 
+    # A booking moved off its assigned day carries that assignment with it.
+    # A separate explicit plan on another day remains independent.
+    target_day = moved_planned_day(task.planned_date, block.start_at, start_at)
+    if block.variant in {"scheduled", "protected"} and target_day is not None:
+        task.planned_date = target_day.isoformat()
+        session.add(task)
+
     block.start_at = start_at
     block.end_at = end_at
     session.add(block)
+    if block.recurrence_series_id and block.recurrence_key:
+        exception_id = f"{block.recurrence_series_id}:{block.recurrence_key}"
+        exception = session.get(RecurrenceOccurrenceException, exception_id) or RecurrenceOccurrenceException(
+            id=exception_id, series_id=block.recurrence_series_id,
+            recurrence_key=block.recurrence_key, disposition="overridden")
+        exception.disposition = "overridden"
+        exception.start_at, exception.end_at = start_at, end_at
+        exception.updated_at = datetime.utcnow()
+        session.add(exception)
     session.commit()
     session.refresh(block)
     try_sync_block_to_google(session, block)
 
     return block_to_read(block, task, category)
+
+
+class UnscheduleBlockRequest(BaseModel):
+    model_config = ConfigDict(alias_generator=alias_generators.to_camel, populate_by_name=True)
+    planned_date: date
+
+
+@router.post("/{block_id}/unschedule")
+def unschedule_calendar_block(
+    block_id: int,
+    body: UnscheduleBlockRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+    """Move one accepted booking to a planned day without deleting its task."""
+    block, task, _category = get_block_with_identity(session, block_id)
+    if block.variant not in {"scheduled", "protected"}:
+        raise HTTPException(status_code=409, detail="Only accepted bookings can be moved to an untimed day.")
+    sync_error = delete_google_event_for_block(session, block)
+    if sync_error:
+        raise HTTPException(status_code=502, detail="Could not remove the linked calendar booking. Please retry.")
+    if block.recurrence_series_id and block.recurrence_key:
+        exception_id = f"{block.recurrence_series_id}:{block.recurrence_key}"
+        exception = session.get(RecurrenceOccurrenceException, exception_id)
+        if exception is None:
+            exception = RecurrenceOccurrenceException(id=exception_id,
+                series_id=block.recurrence_series_id, recurrence_key=block.recurrence_key,
+                disposition="cancelled")
+        exception.disposition = "cancelled"
+        exception.start_at = None
+        exception.end_at = None
+        exception.updated_at = datetime.utcnow()
+        session.add(exception)
+    task.planned_date = body.planned_date.isoformat()
+    session.add(task)
+    session.delete(block)
+    session.flush()
+    result = {"taskId": task.id, "plannedDate": task.planned_date,
+              "scheduledTaskIds": list_scheduled_task_ids(session)}
+    session.commit()
+    return result
 
 
 @router.delete("/{block_id}", status_code=status.HTTP_204_NO_CONTENT)

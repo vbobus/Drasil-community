@@ -345,8 +345,12 @@ class GoogleCalendarIntegrationTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn("text/html", response.headers["content-type"])
         self.assertIn("drasil:google-calendar:oauth", response.text)
-        self.assertIn("window.opener.postMessage", response.text)
-        self.assertIn("window.close()", response.text)
+        self.assertIn('src="http://localhost:5173/oauth-popup.js"', response.text)
+        self.assertIn('type="application/json" id="oauth-result"', response.text)
+        self.assertNotIn('onclick=', response.text)
+        popup_script = (Path(__file__).resolve().parents[2] / "frontend/public/oauth-popup.js").read_text()
+        self.assertIn("window.opener.postMessage", popup_script)
+        self.assertIn("window.close()", popup_script)
 
     def test_google_oauth_callback_pushes_existing_calendar_blocks(self) -> None:
         env = {

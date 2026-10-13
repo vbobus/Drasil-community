@@ -155,6 +155,9 @@ def normalize_metadata_updates(raw_updates: Any) -> dict[str, Any]:
         lowered = priority.strip().lower()
         if lowered in VALID_PRIORITIES:
             normalized["priority"] = lowered
+    planned_date = normalize_deadline_date(raw_updates.get("planned_date", raw_updates.get("plannedDate")))
+    if planned_date:
+        normalized["planned_date"] = planned_date
     deadline_at = raw_updates.get("deadline_at", raw_updates.get("deadlineAt"))
     normalized_deadline = normalize_deadline_date(deadline_at)
     if normalized_deadline:
@@ -462,6 +465,7 @@ def normalize_structural_operation_envelope(raw_operation: dict[str, Any]) -> di
             "categoryName",
             "status",
             "priority",
+            "planned_date",
             "deadline_at",
             "deadlineAt",
             "notes",
@@ -874,6 +878,9 @@ def normalize_structural_operation(
         emoji = normalize_structural_operation_text(raw_operation.get("emoji"))
         if emoji:
             operation["emoji"] = emoji
+        planned_date = normalize_deadline_date(first_present(raw_operation, "planned_date", "plannedDate"))
+        if planned_date:
+            operation["planned_date"] = planned_date
         deadline_at = normalize_structural_operation_text(
             first_present(raw_operation, "deadline_at", "deadlineAt")
         )
@@ -1250,6 +1257,9 @@ def normalize_top_level_create_branch_proposal(
         notes = normalize_structural_operation_text(raw_operation.get("notes"))
         if notes:
             operation["notes"] = notes
+        planned_date = normalize_deadline_date(first_present(raw_operation, "planned_date", "plannedDate"))
+        if planned_date:
+            operation["planned_date"] = planned_date
         deadline_at = normalize_structural_operation_text(
             first_present(raw_operation, "deadline_at", "deadlineAt")
         )
@@ -1302,7 +1312,16 @@ def normalize_top_level_create_branch_proposal(
             str(parent_operation.get("temp_id") or "").strip()
             or _temp_id_from_title(parent_title)
         )
-        has_nested_intent = _proposal_requests_nested_top_level_create(raw_proposal)
+        # Explicit temp-parent links already define the forest. A mention of
+        # "subtasks" must not re-parent other independent roots under the first.
+        has_explicit_parent_links = any(
+            operation.get("parent_id") is not None or operation.get("parent_temp_id")
+            for operation in normalized_operations
+        )
+        has_nested_intent = (
+            not has_explicit_parent_links
+            and _proposal_requests_nested_top_level_create(raw_proposal)
+        )
         repaired_child_indices = [
             index
             for index in flat_child_candidate_indices

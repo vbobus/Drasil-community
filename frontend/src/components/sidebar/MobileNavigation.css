@@ -1,0 +1,25 @@
+.mobile-app-header { display: flex; align-items: center; justify-content: space-between; flex: 0 0 auto; padding: max(4px, env(safe-area-inset-top)) 12px 4px; border-bottom: 1px solid var(--color-border-subtle); }
+.mobile-app-header > button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 10px; border-radius: 8px; color: var(--color-text-primary); font-size: .875rem; touch-action: manipulation; }
+.mobile-app-wordmark { color: var(--color-text-primary); font-weight: 700; padding-right: 4px; }
+.mobile-app-header > button:focus-visible { outline: 2px solid var(--color-state-info); outline-offset: 2px; }
+.mobile-app-header > button:active { background: var(--color-bg-overlay); }
+.mobile-navigation-dialog { position: fixed; inset: var(--visual-viewport-top, 0px) auto auto var(--visual-viewport-left, 0px); margin: 0; padding: 0; width: min(320px, calc(100vw - 48px)); height: var(--visual-viewport-height, 100dvh); max-height: none; max-width: none; border: 0; background: var(--color-bg-surface); color: var(--color-text-primary); overflow: hidden; box-shadow: 12px 0 32px -16px rgb(0 0 0 / 40%); }
+.mobile-navigation-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+.mobile-navigation-dialog[open] { animation: mobile-navigation-in 180ms cubic-bezier(.16, 1, .3, 1); }
+.mobile-navigation-dialog .sidebar { width: 100%; min-height: 0; height: 100%; padding: max(8px, env(safe-area-inset-top)) 0 max(8px, env(safe-area-inset-bottom)); border: 0; transition: none; will-change: auto; }
+.mobile-navigation-dialog .sidebar:not(.collapsed) .sidebar-header { padding: 0 12px 8px; min-height: 52px; }
+.mobile-navigation-dialog .sidebar:not(.collapsed) .sidebar-nav-label,
+.mobile-navigation-dialog .sidebar:not(.collapsed) .sidebar-item-label,
+.mobile-navigation-dialog .sidebar:not(.collapsed) .sidebar-add-section { display: block; }
+.mobile-navigation-dialog .sidebar:not(.collapsed) .sidebar-item-main { justify-content: flex-start; padding-inline: 12px; min-height: 48px; gap: 12px; }
+.mobile-navigation-dialog .sidebar-item-label { font-size: .9375rem; }
+.mobile-navigation-dialog .sidebar-header-toggle { width: 44px; height: 44px; flex-shrink: 0; border: 0; border-radius: 8px; box-shadow: none; background: transparent; color: var(--color-text-primary); }
+.mobile-navigation-dialog .sidebar-all-label { animation: none; background: none; color: var(--color-text-primary); -webkit-text-fill-color: currentColor; }
+.mobile-navigation-dialog .sidebar-add-btn, .mobile-navigation-dialog .sidebar-account-switch, .mobile-navigation-dialog .sidebar-account-logout, .mobile-navigation-dialog .sidebar-add-actions button { min-height: 44px; }
+.mobile-navigation-dialog .sidebar-account-logout { min-width: 44px; }
+.mobile-navigation-dialog .sidebar-account-copy strong { font-size: .875rem; }
+.mobile-navigation-dialog .sidebar-account-copy small { font-size: .75rem; }
+.mobile-navigation-dialog .sidebar-add-editor { max-height: calc(var(--visual-viewport-height, 100dvh) - 100px); }
+.mobile-navigation-dialog input { font-size: 16px; }
+@keyframes mobile-navigation-in { from { transform: translateX(-24px); opacity: .75; } }
+@media (prefers-reduced-motion: reduce) { .mobile-navigation-dialog[open] { animation: none; } }

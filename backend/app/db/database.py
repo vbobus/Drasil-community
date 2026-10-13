@@ -22,6 +22,7 @@ from sqlalchemy import event, inspect, text
 from sqlalchemy.engine import Engine, make_url
 
 from app.core.env import load_local_env
+from app.db.hosted import hosted_storage, hosted_runtime, postgres_engine, account_schema
 from app.services.account_auth import (
     AccountRecord,
     active_account,
@@ -29,6 +30,7 @@ from app.services.account_auth import (
     use_account,
 )
 from app.models.category import Category  # noqa: F401
+from app.models.companion import CompanionSettings, CompanionRun  # noqa: F401
 from app.models.calendar_block import CalendarBlock  # noqa: F401
 from app.models.calendar_integration import CalendarIntegration  # noqa: F401
 from app.models.agent_goal import AgentGoalStateRecord, AgentGoalTransitionRecord  # noqa: F401
@@ -47,6 +49,7 @@ from app.models.agent_execution import (  # noqa: F401
 )
 from app.models.change_set import ChangeSetRecord  # noqa: F401
 from app.models.node import StrategyNode, StrategyNodeIdSequence  # noqa: F401
+from app.models.habit import Habit, HabitCheckIn  # noqa: F401
 from app.models.recurrence_series import (  # noqa: F401
     RecurrenceOccurrenceException,
     RecurrenceSeries,
@@ -175,6 +178,10 @@ def _configure_explicit_test_checkpoint_database(db_path: Path | None) -> None:
 
 
 def _configure_isolated_test_database() -> None:
+    if hosted_storage():
+        if os.getenv("DRASIL_TEST_ISOLATED_DB") == "1":
+            raise RuntimeError("SQLite test bypass cannot be enabled with hosted storage.")
+        return
     if not _looks_like_test_process():
         return
     configured_url = os.getenv("DRASIL_DATABASE_URL")
@@ -243,18 +250,21 @@ def assert_test_database_mutation_allowed() -> None:
 
 # connect_args required for SQLite + async-style usage in FastAPI.
 engine = create_engine(
-    DATABASE_URL,
+    "sqlite://" if hosted_storage() else DATABASE_URL,
     connect_args={"check_same_thread": False},
     echo=False,  # Set to True for SQL query logging during debugging.
 )
 
 _ACCOUNT_ENGINES: dict[str, Engine] = {}
 _ACCOUNT_ENGINES_LOCK = threading.Lock()
+_HOSTED_INITIALIZED: set[str] = set()
 
 
 def engine_for_account(account: AccountRecord) -> Engine:
     """Return the cached engine for one isolated account database."""
 
+    if hosted_storage():
+        return postgres_engine(account_schema(account.id))
     with _ACCOUNT_ENGINES_LOCK:
         cached = _ACCOUNT_ENGINES.get(account.id)
         if cached is not None:
@@ -285,6 +295,11 @@ def get_active_engine() -> Engine:
 
     account = active_account(required=False)
     if account is not None:
+        # A saved session can outlive a deployment and never revisit login.
+        # Upgrade this account before any ORM query; initialization is cached
+        # only after success and serialized across hosted workers in Postgres.
+        if hosted_storage():
+            initialize_account_database(account)
         return engine_for_account(account)
     if os.getenv("DRASIL_TEST_ISOLATED_DB") == "1":
         return engine
@@ -484,6 +499,9 @@ def create_db_and_tables(bind: Engine | None = None) -> None:
             connection.execute(
                 text("ALTER TABLE strategy_nodes ADD COLUMN priority VARCHAR(16) DEFAULT 'medium'")
             )
+    if "planned_date" not in existing_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE strategy_nodes ADD COLUMN planned_date VARCHAR(10)"))
     if "deadline_at" not in existing_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE strategy_nodes ADD COLUMN deadline_at VARCHAR(32)"))
@@ -682,7 +700,13 @@ def get_session():
 
 def initialize_account_database(account: AccountRecord) -> None:
     """Create and seed one account's isolated application database."""
-
+    if hosted_storage():
+        with _ACCOUNT_ENGINES_LOCK:
+            if account.id in _HOSTED_INITIALIZED:
+                return
+            _initialize_postgres_account(account)
+            _HOSTED_INITIALIZED.add(account.id)
+        return
     account_engine = engine_for_account(account)
     with use_account(account):
         create_db_and_tables(account_engine)
@@ -695,9 +719,62 @@ def initialize_account_database(account: AccountRecord) -> None:
         pass
 
 
+def _initialize_postgres_account(account: AccountRecord) -> None:
+    from app.db.schema_version import ACCOUNT_SCHEMA_VERSION, current_schema_version, record_schema_version
+    from app.core.request_timing import timed
+    schema = account_schema(account.id)
+    from app.db.seed import DEFAULT_CATEGORIES
+    with timed("schema"), engine_for_account(account).begin() as connection:
+        if current_schema_version(connection, ACCOUNT_SCHEMA_VERSION):
+            return
+        # DDL + default records are atomic; concurrent cold starts share this lock.
+        connection.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:schema, 0))"), {"schema": schema})
+        connection.execute(text(f'CREATE SCHEMA IF NOT EXISTS "{schema}"'))
+        if current_schema_version(connection, ACCOUNT_SCHEMA_VERSION):
+            return
+        SQLModel.metadata.create_all(connection)
+        connection.execute(text("ALTER TABLE strategy_nodes ADD COLUMN IF NOT EXISTS planned_date VARCHAR(10)"))
+        _migrate_postgres_agent_event_payload(connection)
+        connection.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_execution_idempotency "
+            "ON agent_change_set_executions (session_id, idempotency_key)"
+        ))
+        connection.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_agent_simulation_event_kind "
+            "ON agent_simulation_events (simulation_id, event_kind)"
+        ))
+        connection.execute(text(
+            "CREATE UNIQUE INDEX IF NOT EXISTS uq_calendar_blocks_recurrence_identity "
+            "ON calendar_blocks (recurrence_series_id, recurrence_key) "
+            "WHERE recurrence_series_id IS NOT NULL AND recurrence_key IS NOT NULL"
+        ))
+        if not connection.execute(text("SELECT 1 FROM categories LIMIT 1")).first():
+            connection.execute(Category.__table__.insert(), DEFAULT_CATEGORIES)
+        connection.execute(text(
+            "INSERT INTO strategy_node_id_sequences (id, last_id) VALUES (1, 0) "
+            "ON CONFLICT (id) DO NOTHING"
+        ))
+        record_schema_version(connection, ACCOUNT_SCHEMA_VERSION)
+
+
+def _migrate_postgres_agent_event_payload(connection) -> None:
+    """Widen existing account event storage without changing persisted JSON."""
+    column_type = connection.execute(text(
+        "SELECT data_type FROM information_schema.columns "
+        "WHERE table_schema = current_schema() "
+        "AND table_name = 'strategist_agent_events' AND column_name = 'payload_json'"
+    )).scalar_one()
+    if column_type == "character varying":
+        connection.execute(text(
+            "ALTER TABLE strategist_agent_events ALTER COLUMN payload_json TYPE TEXT"
+        ))
+
+
 def initialize_existing_account_databases(recover_runs) -> None:
     """Prepare every registered account database at process startup."""
-
+    if hosted_runtime():
+        # A cold start must never scan all accounts or launch detached workers.
+        return
     accounts = list_accounts()
     if not accounts and os.getenv("DRASIL_TEST_ISOLATED_DB") == "1":
         create_db_and_tables(engine)

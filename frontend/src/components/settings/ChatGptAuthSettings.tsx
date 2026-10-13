@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Moon, Sun } from 'lucide-react';
+import { Moon, Sun, Plug, Palette, Brain, UserRound, ExternalLink, CheckCircle2 } from 'lucide-react';
 import {
   fetchChatGptAuthStatus,
   fetchStrategistProviderSettings,
@@ -18,6 +18,7 @@ import {
   type GoogleCalendarStatus,
 } from '../../api/calendarIntegrations';
 import { RememberedPreferencesSettings } from './RememberedPreferencesSettings';
+import { CompanionSettings } from './CompanionSettings';
 import { AccountManagementSettings } from './AccountManagementSettings';
 import { useUiStore } from '../../store/useUiStore';
 import './ChatGptAuthSettings.css';
@@ -27,17 +28,19 @@ const CUSTOM_CODEX_MODEL_OPTION = '__custom__';
 const ALL_CODEX_REASONING_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'];
 
 const settingsSections = [
-  { id: 'appearance', label: 'Appearance' },
-  { id: 'connections', label: 'Connections' },
-  { id: 'memory', label: 'Remembered preferences' },
-  { id: 'accounts', label: 'Accounts & server' },
+  { id: 'connections', label: 'Connections', icon: Plug },
+  { id: 'companion', label: 'Companion', icon: Brain },
+  { id: 'appearance', label: 'Appearance', icon: Palette },
+  { id: 'memory', label: 'Memory', icon: Brain },
+  { id: 'accounts', label: 'Account & access', icon: UserRound },
 ] as const;
 
 type SettingsSection = (typeof settingsSections)[number]['id'];
 
 const settingsSectionTitles: Record<SettingsSection, string> = {
+  companion: 'Your companion',
   appearance: 'Appearance',
-  connections: 'Strategist providers',
+  connections: 'Connections',
   memory: 'Remembered preferences',
   accounts: 'Accounts & server',
 };
@@ -147,8 +150,9 @@ function getCodexModelCatalog(settings: StrategistProviderSettings | null): Code
 }
 
 export function ChatGptAuthSettings() {
-  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>('appearance');
+  const [activeSettingsSection, setActiveSettingsSection] = useState<SettingsSection>(useUiStore.getState().settingsSection);
   const [status, setStatus] = useState<ChatGptAuthStatus | null>(null);
+  const loginFlowRef = useRef<HTMLElement>(null);
   const [providerSettings, setProviderSettings] = useState<StrategistProviderSettings | null>(null);
   const [googleCalendarStatus, setGoogleCalendarStatus] = useState<GoogleCalendarStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -182,7 +186,10 @@ export function ChatGptAuthSettings() {
     const [nextStatus, nextProviderSettings, nextGoogleCalendarStatus] = await Promise.all([
       fetchChatGptAuthStatus(),
       fetchStrategistProviderSettings(true),
-      fetchGoogleCalendarStatus(),
+      fetchGoogleCalendarStatus().catch(() => {
+        setGoogleCalendarError('Calendar status could not be loaded. Try Refresh status.');
+        return null;
+      }),
     ]);
     setStatus(nextStatus);
     setProviderSettings(nextProviderSettings);
@@ -222,8 +229,12 @@ export function ChatGptAuthSettings() {
       return;
     }
 
+    let checking = false;
     const interval = window.setInterval(() => {
-      void Promise.all([fetchChatGptAuthStatus(), fetchStrategistProviderSettings()])
+      if (checking) return;
+      checking = true;
+      void fetchChatGptAuthStatus()
+        .then(async (nextStatus) => [nextStatus, await fetchStrategistProviderSettings()] as const)
         .then(([nextStatus, nextProviderSettings]) => {
           setStatus(nextStatus);
           setProviderSettings(nextProviderSettings);
@@ -243,7 +254,8 @@ export function ChatGptAuthSettings() {
               ? requestError.message
               : 'Failed to refresh ChatGPT authentication status.',
           );
-        });
+        })
+        .finally(() => { checking = false; });
     }, 2500);
 
     return () => {
@@ -300,15 +312,33 @@ export function ChatGptAuthSettings() {
     setGoogleCalendarError(null);
   };
 
-  const handleStart = async () => {
+  useEffect(() => {
+    if (status?.pendingSession?.status === 'pending') {
+      loginFlowRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    }
+  }, [status?.pendingSession?.sessionId, status?.pendingSession?.status]);
+
+  const handleStart = async (restart = false) => {
+    const popup = window.open('about:blank', '_blank');
+    if (popup) popup.opener = null;
     setIsStarting(true);
     setCopiedCode(false);
     setCopiedLink(false);
     try {
+      if (restart) await logoutChatGptAuth();
       const nextStatus = await startChatGptAuth();
+      const authUrl = nextStatus.pendingSession?.verificationUri;
+      if (authUrl) {
+        const url = new URL(authUrl);
+        if (url.protocol !== 'https:' || !['auth.openai.com', 'auth0.openai.com', 'chatgpt.com'].includes(url.hostname)) {
+          throw new Error('OpenAI returned an invalid sign-in address. Please try again.');
+        }
+        if (popup) popup.location.href = url.href;
+      } else popup?.close();
       setStatus(nextStatus);
       setError(null);
     } catch (requestError) {
+      popup?.close();
       setError(
         requestError instanceof Error
           ? requestError.message
@@ -353,7 +383,9 @@ export function ChatGptAuthSettings() {
   };
 
   const handleClearByok = async () => {
-    const activeProvider = providerSettings?.activeProvider === 'openai-api' ? 'codex-cli' : (providerSettings?.activeProvider ?? 'codex-cli');
+    const activeProvider = providerSettings?.supportsChatGptLogin === false
+      ? 'openai-api'
+      : 'codex-cli';
     setIsSavingProvider(true);
     try {
       const nextProviderSettings = await saveStrategistProviderSettings({
@@ -533,16 +565,6 @@ export function ChatGptAuthSettings() {
   const codexPickerValue = showCustomCodexModelInput
     ? CUSTOM_CODEX_MODEL_OPTION
     : getCodexPickerValue(codexModel, codexModelOptions);
-  const summaryTitle = hasPendingManualFlow
-    ? 'Finish connecting ChatGPT'
-    : isConnected
-      ? 'Connected to ChatGPT'
-      : 'Not connected';
-  const summaryCopy = hasPendingManualFlow
-    ? 'Use the link and one-time code below in any browser. Once you finish sign-in manually, this panel will detect completion automatically.'
-    : isConnected
-      ? 'This machine is already connected. If you want to switch to a different ChatGPT account here, disconnect first and then start the manual device-code flow.'
-      : 'Strategist uses your local Codex login for the MVP. Start the device-code flow here, finish it in the browser, and the app will detect completion automatically.';
   const isGoogleCalendarConfigured = Boolean(googleCalendarStatus?.isConfigured);
   const googleCalendarRequiresReconnect = Boolean(
     googleCalendarStatus?.requiresReconnect ||
@@ -558,93 +580,150 @@ export function ChatGptAuthSettings() {
     isSyncingGoogleCalendar;
 
   return (
-    <article className="planning-surface planning-settings-surface">
-      <div className="planning-surface-header">
-        <div>
-          <p className="planning-surface-label">Settings</p>
-          <h3 className="planning-surface-title">{settingsSectionTitles[activeSettingsSection]}</h3>
-        </div>
-        {activeSettingsSection === 'connections' && (
-          <span className="settings-auth-provider">
-            Active: {providerSettings?.activeProviderLabel ?? 'ChatGPT login'}
-          </span>
-        )}
-      </div>
-
-      <nav className="settings-submenu" aria-label="Settings sections">
-        {settingsSections.map((section) => (
-          <button
-            key={section.id}
-            type="button"
-            className={`settings-submenu-btn${activeSettingsSection === section.id ? ' is-active' : ''}`}
-            onClick={() => setActiveSettingsSection(section.id)}
-            aria-current={activeSettingsSection === section.id ? 'page' : undefined}
-          >
-            {section.label}
+    <article className="settings-workbench">
+      <nav className="settings-navigation" aria-label="Settings sections">
+        {settingsSections.map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" onClick={() => setActiveSettingsSection(id)}
+            aria-current={activeSettingsSection === id ? 'page' : undefined}>
+            <Icon size={18} aria-hidden="true" />{label}
           </button>
         ))}
       </nav>
-
-      <div className="planning-ai-scroll settings-auth-scroll">
-        {activeSettingsSection === 'appearance' ? (
-          <AppearanceSettings />
-        ) : activeSettingsSection === 'memory' ? (
-          <RememberedPreferencesSettings />
-        ) : activeSettingsSection === 'accounts' ? (
-          <AccountManagementSettings />
-        ) : (
-          <>
-        <section className="settings-auth-card settings-provider-card">
-          <div className="settings-provider-header">
-            <div>
-              <p className="settings-auth-title">Choose the Strategist provider</p>
-              <p className="settings-auth-copy">
-                Keep ChatGPT login for the Codex flow, or switch Strategist to BYOK with
-                your own OpenAI API key.
-              </p>
-            </div>
-            <span className="settings-auth-pill">{providerSettings?.activeProviderLabel ?? 'ChatGPT login'}</span>
-          </div>
-
-          <div className="settings-provider-choice-grid">
-            <button
-              type="button"
-              className={`settings-provider-choice${activeProvider === 'codex-cli' ? ' is-active' : ''}`}
-              onClick={() => void handleSaveProvider('codex-cli')}
-              disabled={isSavingProvider}
-            >
-              <strong>ChatGPT login</strong>
-              <span>Uses the local Codex session on this machine.</span>
-            </button>
-
-            <button
-              type="button"
-              className={`settings-provider-choice${activeProvider === 'openai-api' ? ' is-active' : ''}`}
-              onClick={() => void handleSaveProvider('openai-api')}
-              disabled={isSavingProvider || !providerSettings?.isOpenAiKeyConfigured}
-              title={
-                providerSettings?.isOpenAiKeyConfigured
-                  ? 'Use BYOK (OpenAI API)'
-                  : 'Save an API key below before switching to BYOK'
-              }
-            >
-              <strong>BYOK (OpenAI API)</strong>
-              <span>
-                {providerSettings?.isOpenAiKeyConfigured
-                  ? `Saved key: ${providerSettings.maskedOpenAiKey}`
-                  : 'No API key saved yet'}
+      <div className="settings-content" key={activeSettingsSection}>
+        <header className="settings-content-heading">
+          <h3>{settingsSectionTitles[activeSettingsSection]}</h3>
+          <p>{activeSettingsSection === 'connections' ? 'Connect the tools you use. Your connections stay private to your Drasil account.'
+            : activeSettingsSection === 'appearance' ? 'Make this workspace comfortable for you.'
+            : activeSettingsSection === 'memory' ? 'Review what Drasil remembers when planning with you.'
+            : activeSettingsSection === 'companion' ? 'Choose how and when you want support.'
+            : 'Manage your profile and who can access this workspace.'}</p>
+        </header>
+        {activeSettingsSection === 'appearance' ? <AppearanceSettings />
+          : activeSettingsSection === 'companion' ? <CompanionSettings />
+          : activeSettingsSection === 'memory' ? <RememberedPreferencesSettings />
+          : activeSettingsSection === 'accounts' ? <AccountManagementSettings /> : <>
+          {error && <div className="settings-auth-error" role="alert">{error}
+            <button type="button" className="planning-ghost-btn" onClick={() => { void loadSettings().then(() => setError(null)).catch(() => setError('Could not load connections. Please try again.')); }}>Try loading again</button>
+          </div>}
+          <section className="connection-primary" aria-labelledby="chatgpt-connection-heading" aria-busy={isLoading || isStarting}>
+            <div className="connection-heading">
+              <div><h4 id="chatgpt-connection-heading">ChatGPT</h4><p>Your subscription, through Codex</p></div>
+              <span className={`connection-state${isConnected ? ' is-connected' : ''}`} role="status">
+                {isConnected && <CheckCircle2 size={15} aria-hidden="true" />}
+                {isLoading ? 'Checking…' : isConnected ? 'Connected' : hasPendingManualFlow ? 'Awaiting sign-in' : 'Not connected'}
               </span>
-            </button>
-          </div>
-        </section>
+            </div>
+            {isConnected ? <>
+              <p className="connection-identity">{status?.email}<span>{status?.planType}</span></p>
+              <p className="settings-auth-copy">{activeProvider === 'codex-cli' ? 'Active for your AI chats.' : 'Connected, but the OpenAI API is selected for chats.'}</p>
+              <div className="settings-auth-action-row">
+                {activeProvider !== 'codex-cli' && <button className="settings-auth-primary-btn" onClick={() => void handleSaveProvider('codex-cli')} disabled={isSavingProvider}>Use ChatGPT for chats</button>}
+                <button className="planning-ghost-btn" onClick={() => void handleDisconnect()} disabled={isDisconnecting}>{isDisconnecting ? 'Disconnecting…' : 'Disconnect'}</button>
+              </div>
+            </> : <>
+              {providerSettings?.chatGptHosting === 'sandbox' && <div className="connection-prerequisite">
+                <strong>Before you connect</strong>
+                <p>In ChatGPT, open Settings → Security and enable <b>Device code sign-in</b>. Then return here to connect.</p>
+                <a href="https://chatgpt.com/#settings/Security" target="_blank" rel="noopener noreferrer">Open ChatGPT security settings <ExternalLink size={14} aria-hidden="true" /></a>
+              </div>}
+              {pendingSession?.status !== 'pending' && <div className="settings-auth-action-row">
+                <button type="button" className="settings-auth-primary-btn" onClick={() => void handleStart()}
+                  disabled={isLoading || isStarting || providerSettings?.supportsChatGptLogin === false}>
+                  {isStarting ? 'Preparing secure sign-in…' : 'Continue with ChatGPT'}
+                </button>
+                <span className="connection-help">Opens OpenAI in a new tab</span>
+              </div>}
+              {isStarting && <p role="status" className="settings-auth-copy">Starting your private AI connection. This can take a few seconds.</p>}
+            </>}
+            {pendingSession?.status === 'pending' && (
+          <section ref={loginFlowRef} className="settings-auth-card settings-auth-flow-card">
+            <div className="settings-auth-flow-header">
+              <div>
+                <p className="settings-auth-title">Enter your code on OpenAI</p>
+                <p className="settings-auth-copy">
+                  {pendingSession.userCode
+                    ? 'On the OpenAI page, sign in and enter the one-time code below. If prompted, enable device-code login in your ChatGPT security settings. Drasil checks the connection automatically.'
+                    : 'Finish signing in on the OpenAI page, then return here. Drasil checks the connection automatically.'}
+                </p>
+              </div>
+              <span className="settings-auth-pill pending">Waiting</span>
+            </div>
 
-        <section className="settings-auth-card settings-codex-card">
+            {pendingSession.userCode && <div className="settings-auth-code-block">
+              <div>
+                <span className="settings-auth-code-label">One-time code</span>
+                <strong className="settings-auth-code">{pendingSession.userCode}</strong>
+              </div>
+              <button
+                type="button"
+                className="planning-ghost-btn"
+                onClick={async () => {
+                  if (!pendingSession.userCode) return;
+                  await navigator.clipboard.writeText(pendingSession.userCode);
+                  setCopiedCode(true);
+                  window.setTimeout(() => setCopiedCode(false), 1800);
+                }}
+              >
+                {copiedCode ? 'Copied' : 'Copy code'}
+              </button>
+            </div>}
+
+            <div className="settings-auth-code-block">
+              <div>
+                <span className="settings-auth-code-label">Login link</span>
+                <strong className="settings-auth-link">{pendingSession.verificationUri}</strong>
+              </div>
+              <button
+                type="button"
+                className="planning-ghost-btn"
+                onClick={async () => {
+                  if (!pendingSession.verificationUri) return;
+                  await navigator.clipboard.writeText(pendingSession.verificationUri);
+                  setCopiedLink(true);
+                  window.setTimeout(() => setCopiedLink(false), 1800);
+                }}
+              >
+                {copiedLink ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+
+            <div className="settings-auth-action-row">
+<button type="button" className="planning-ghost-btn" onClick={() => void handleStart(true)} disabled={isStarting}>Get a new code</button>
+              <button
+                type="button"
+                className="settings-auth-primary-btn"
+                onClick={() => {
+                  if (pendingSession.verificationUri) {
+                    window.open(pendingSession.verificationUri, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              >
+                Open ChatGPT login
+              </button>
+              <button
+                type="button"
+                className="planning-ghost-btn"
+                onClick={() => void handleDisconnect()}
+                disabled={isDisconnecting}
+              >
+                Cancel
+              </button>
+            </div>
+          </section>
+        )}
+
+
+            {pendingSession && pendingSession.status !== 'pending' && pendingSession.error && <div className="settings-auth-error" role="alert">{pendingSession.error}</div>}
+            <p className="connection-footnote">{providerSettings?.chatGptHosting === 'sandbox'
+              ? 'AI starts when needed and sleeps after five idle minutes. Subscription limits apply. No automatic API billing.'
+              : 'Uses the ChatGPT account connected to this Drasil profile.'}</p>
+          </section>
+          <details className="settings-disclosure"><summary>Model & reasoning <span>{codexModel || 'Codex default'}</span></summary><section className="settings-auth-card settings-codex-card">
           <div className="settings-provider-header">
             <div>
               <p className="settings-auth-title">ChatGPT login model</p>
               <p className="settings-auth-copy">
-                Choose any model available to your ChatGPT login, including Sol, Terra, and
-                Luna, and set how much thinking it should use.
+                Use the default, or choose a model your subscription can access. Reasoning summaries appear when the model supplies them.
               </p>
             </div>
             <span className="settings-auth-pill">
@@ -659,7 +738,7 @@ export function ChatGptAuthSettings() {
             </div>
             <select
               className="settings-byok-input settings-model-select"
-              value={codexPickerValue}
+              aria-label="ChatGPT model" value={codexPickerValue}
               onChange={(event) => {
                 const value = event.target.value;
                 if (value === DEFAULT_CODEX_MODEL_OPTION) {
@@ -706,7 +785,7 @@ export function ChatGptAuthSettings() {
               <input
                 type="text"
                 className="settings-byok-input"
-                value={codexModel}
+                aria-label="Custom model" value={codexModel}
                 onChange={(event) => setCodexModel(event.target.value)}
                 placeholder="gpt-5.1-codex-mini"
                 autoComplete="off"
@@ -725,7 +804,7 @@ export function ChatGptAuthSettings() {
             </div>
             <select
               className="settings-byok-input settings-model-select"
-              value={codexReasoningEffort}
+              aria-label="Thinking level" value={codexReasoningEffort}
               onChange={(event) => setCodexReasoningEffort(event.target.value)}
             >
               <option value="">
@@ -747,8 +826,7 @@ export function ChatGptAuthSettings() {
           )}
 
           <p className="settings-model-hint">
-            This only changes the ChatGPT-login path. It does not switch the active provider
-            unless you explicitly choose ChatGPT login above.
+            These settings apply to ChatGPT. Saving does not switch your active connection.
           </p>
 
           <div className="settings-auth-action-row">
@@ -761,75 +839,10 @@ export function ChatGptAuthSettings() {
               {isSavingProvider ? 'Saving...' : 'Save model settings'}
             </button>
           </div>
-        </section>
-
-        <section className="settings-auth-card settings-byok-card">
-          <div className="settings-provider-header">
-            <div>
-              <p className="settings-auth-title">Bring your own key</p>
-              <p className="settings-auth-copy">
-                Save a local OpenAI API key for this machine and use it as the Strategist
-                provider when you want to move off the ChatGPT login path.
-              </p>
-            </div>
-            <span className="settings-auth-pill">
-              {providerSettings?.isOpenAiKeyConfigured ? 'Key saved' : 'No key'}
-            </span>
-          </div>
-
-          <div className="settings-auth-code-block settings-byok-field">
-            <div>
-              <span className="settings-auth-code-label">OpenAI API key</span>
-              <strong className="settings-auth-link">
-                {providerSettings?.maskedOpenAiKey ?? 'No key saved locally'}
-              </strong>
-            </div>
-            <input
-              type="password"
-              className="settings-byok-input"
-              value={openAiApiKey}
-              onChange={(event) => setOpenAiApiKey(event.target.value)}
-              placeholder="Enter a new key or leave blank to keep the existing one"
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="settings-auth-code-block settings-byok-field">
-            <div>
-              <span className="settings-auth-code-label">Model</span>
-              <strong className="settings-auth-link">{openAiModel || 'gpt-5-mini'}</strong>
-            </div>
-            <input
-              type="text"
-              className="settings-byok-input"
-              value={openAiModel}
-              onChange={(event) => setOpenAiModel(event.target.value)}
-              placeholder="gpt-5-mini"
-              autoComplete="off"
-            />
-          </div>
-
-          <div className="settings-auth-action-row">
-            <button
-              type="button"
-              className="settings-auth-primary-btn"
-              onClick={() => void handleSaveProvider('openai-api')}
-              disabled={isSavingProvider}
-            >
-              {isSavingProvider ? 'Saving...' : 'Save and use BYOK'}
-            </button>
-            <button
-              type="button"
-              className="planning-ghost-btn"
-              onClick={() => void handleClearByok()}
-              disabled={isSavingProvider || !providerSettings?.isOpenAiKeyConfigured}
-            >
-              Clear saved key
-            </button>
-          </div>
-        </section>
-
-        <section className="settings-auth-card settings-calendar-card">
+        </section></details>
+          <section className="connection-secondary">
+            <h4>Other connections</h4>
+            <details className="settings-disclosure"><summary>Google Calendar <span>{isGoogleCalendarConnected ? 'Connected' : isGoogleCalendarConfigured ? 'Not connected' : 'Setup required'}</span></summary><section className="settings-auth-card settings-calendar-card">
           <div className="settings-provider-header">
             <div>
               <p className="settings-auth-title">Google Calendar</p>
@@ -846,7 +859,7 @@ export function ChatGptAuthSettings() {
                   ? 'Reconnect'
                 : isGoogleCalendarConfigured
                   ? 'Ready'
-                  : 'Unavailable'}
+                  : 'Setup required'}
             </span>
           </div>
 
@@ -931,141 +944,77 @@ export function ChatGptAuthSettings() {
               OAuth credentials must be configured once before users can connect with Google.
             </p>
           )}
-        </section>
-
-        <section className="settings-auth-card settings-auth-summary-card">
-          <div>
-            <p className="settings-auth-title">{summaryTitle}</p>
-            <p className="settings-auth-copy">{summaryCopy}</p>
+        </section></details>
+            <details className="settings-disclosure"><summary>OpenAI API <span>{activeProvider === 'openai-api' ? 'Active · separately billed' : 'Optional · separately billed'}</span></summary>
+              <p className="settings-auth-copy">API usage is billed separately from ChatGPT. Connect only if you want to use API credits.</p><section className="settings-auth-card settings-byok-card">
+          <div className="settings-provider-header">
+            <div>
+              <p className="settings-auth-title">OpenAI API</p>
+              <p className="settings-auth-copy">
+                {providerSettings?.supportsChatGptLogin === false
+                  ? 'Your key is encrypted and saved privately for your Drasil account.'
+                  : 'Save an OpenAI API key privately for this account to use with Strategist.'}
+              </p>
+            </div>
+            <span className="settings-auth-pill">
+              {providerSettings?.isOpenAiKeyConfigured ? 'Key saved' : 'No key'}
+            </span>
           </div>
 
-          <div className="settings-auth-status-grid">
-            <div className="settings-auth-status-item">
-              <span>Status</span>
-              <strong>{status?.isAuthenticated ? 'Connected' : 'Disconnected'}</strong>
+          <div className="settings-auth-code-block settings-byok-field">
+            <div>
+              <span className="settings-auth-code-label">OpenAI API key</span>
+              <strong className="settings-auth-link">
+                {providerSettings?.maskedOpenAiKey ?? 'No key saved'}
+              </strong>
             </div>
-            <div className="settings-auth-status-item">
-              <span>Plan</span>
-              <strong>{status?.planType ?? 'Unknown'}</strong>
+            <input
+              type="password"
+              className="settings-byok-input"
+              aria-label="OpenAI API key" value={openAiApiKey}
+              onChange={(event) => setOpenAiApiKey(event.target.value)}
+              placeholder="Enter a new key or leave blank to keep the existing one"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="settings-auth-code-block settings-byok-field">
+            <div>
+              <span className="settings-auth-code-label">Model</span>
+              <strong className="settings-auth-link">{openAiModel || 'gpt-5-mini'}</strong>
             </div>
-            <div className="settings-auth-status-item">
-              <span>Email</span>
-              <strong>{status?.email ?? 'Unknown'}</strong>
-            </div>
-            <div className="settings-auth-status-item">
-              <span>Last refresh</span>
-              <strong>{formatLastRefresh(status?.lastRefresh)}</strong>
-            </div>
+            <input
+              type="text"
+              className="settings-byok-input"
+              aria-label="OpenAI API model" value={openAiModel}
+              onChange={(event) => setOpenAiModel(event.target.value)}
+              placeholder="gpt-5-mini"
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="settings-auth-action-row">
+            <button
+              type="button"
+              className="settings-auth-primary-btn"
+              onClick={() => void handleSaveProvider('openai-api')}
+              disabled={isSavingProvider}
+            >
+              {isSavingProvider ? 'Saving...' : 'Save and use API key'}
+            </button>
+            <button
+              type="button"
+              className="planning-ghost-btn"
+              onClick={() => void handleClearByok()}
+              disabled={isSavingProvider || !providerSettings?.isOpenAiKeyConfigured}
+            >
+              Clear saved key
+            </button>
           </div>
         </section>
-
-        {pendingSession?.status === 'pending' && (
-          <section className="settings-auth-card settings-auth-flow-card">
-            <div className="settings-auth-flow-header">
-              <div>
-                <p className="settings-auth-title">Finish sign-in in your browser</p>
-                <p className="settings-auth-copy">
-                  Open the ChatGPT device login page, enter the one-time code, and return here.
-                  This panel polls status automatically.
-                </p>
-              </div>
-              <span className="settings-auth-pill pending">Waiting</span>
-            </div>
-
-            <div className="settings-auth-code-block">
-              <div>
-                <span className="settings-auth-code-label">One-time code</span>
-                <strong className="settings-auth-code">{pendingSession.userCode}</strong>
-              </div>
-              <button
-                type="button"
-                className="planning-ghost-btn"
-                onClick={async () => {
-                  if (!pendingSession.userCode) return;
-                  await navigator.clipboard.writeText(pendingSession.userCode);
-                  setCopiedCode(true);
-                  window.setTimeout(() => setCopiedCode(false), 1800);
-                }}
-              >
-                {copiedCode ? 'Copied' : 'Copy code'}
-              </button>
-            </div>
-
-            <div className="settings-auth-code-block">
-              <div>
-                <span className="settings-auth-code-label">Login link</span>
-                <strong className="settings-auth-link">{pendingSession.verificationUri}</strong>
-              </div>
-              <button
-                type="button"
-                className="planning-ghost-btn"
-                onClick={async () => {
-                  if (!pendingSession.verificationUri) return;
-                  await navigator.clipboard.writeText(pendingSession.verificationUri);
-                  setCopiedLink(true);
-                  window.setTimeout(() => setCopiedLink(false), 1800);
-                }}
-              >
-                {copiedLink ? 'Copied' : 'Copy link'}
-              </button>
-            </div>
-
-            <div className="settings-auth-action-row">
-              <button
-                type="button"
-                className="settings-auth-primary-btn"
-                onClick={() => {
-                  if (pendingSession.verificationUri) {
-                    window.open(pendingSession.verificationUri, '_blank', 'noopener,noreferrer');
-                  }
-                }}
-              >
-                Open ChatGPT login
-              </button>
-              <button
-                type="button"
-                className="planning-ghost-btn"
-                onClick={() => void handleDisconnect()}
-                disabled={isDisconnecting}
-              >
-                Cancel
-              </button>
-            </div>
+            </details>
           </section>
-        )}
-
-        {pendingSession && pendingSession.status !== 'pending' && pendingSession.error && (
-          <div className="settings-auth-error" role="alert">
-            {pendingSession.error}
-          </div>
-        )}
-
-        {error && (
-          <div className="settings-auth-error" role="alert">
-            {error}
-          </div>
-        )}
-
-        <div className="settings-auth-action-row">
-          <button
-            type="button"
-            className="settings-auth-primary-btn"
-            onClick={() => void handleStart()}
-            disabled={isLoading || isStarting || pendingSession?.status === 'pending' || isConnected}
-          >
-            {isStarting ? 'Starting...' : isConnected ? 'Connected' : 'Connect ChatGPT'}
-          </button>
-          <button
-            type="button"
-            className="planning-ghost-btn"
-            onClick={() => void handleDisconnect()}
-            disabled={!status?.isAuthenticated || isDisconnecting}
-          >
-            {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
-          </button>
-        </div>
-          </>
-        )}
+        </>}
       </div>
     </article>
   );

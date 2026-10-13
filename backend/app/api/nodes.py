@@ -141,6 +141,7 @@ class StrategyNodeRead(BaseModel):
     priority: str
     node_type: str
     parent_id: Optional[int]
+    planned_date: Optional[str] = None
     deadline_at: Optional[str]
     time_estimate_minutes: Optional[int]
     emoji: Optional[str]
@@ -191,6 +192,7 @@ class StrategyNodeCreate(BaseModel):
     priority: str = "medium"
     node_type: str = "task"
     parent_id: Optional[int] = None
+    planned_date: Optional[str] = None
     deadline_at: Optional[str] = None
     time_estimate_minutes: Optional[int] = Field(default=None, gt=0)
     emoji: Optional[str] = None
@@ -215,7 +217,7 @@ class StrategyNodeCreate(BaseModel):
             raise ValueError("priority must be low, medium, or high")
         return normalized
 
-    @field_validator("deadline_at")
+    @field_validator("deadline_at", "planned_date")
     @classmethod
     def validate_deadline(cls, value: Optional[str]) -> Optional[str]:
         if value in (None, ""):
@@ -243,6 +245,7 @@ class StrategyNodeUpdate(BaseModel):
     notes: Optional[str] = None
     status: Optional[str] = None
     priority: Optional[str] = None
+    planned_date: Optional[str] = None
     deadline_at: Optional[str] = None
     time_estimate_minutes: Optional[int] = None
     emoji: Optional[str] = None
@@ -262,7 +265,7 @@ class StrategyNodeUpdate(BaseModel):
             raise ValueError("priority must be low, medium, or high")
         return normalized
 
-    @field_validator("deadline_at")
+    @field_validator("deadline_at", "planned_date")
     @classmethod
     def validate_deadline(cls, value: Optional[str]) -> Optional[str]:
         if value in (None, ""):
@@ -356,11 +359,14 @@ def list_nodes(
     category_id: int = Query(alias="categoryId"),
     session: Session = Depends(get_session),
 ) -> List[StrategyNodeRead]:
-    nodes = list(session.exec(
-        select(StrategyNode)
-        .where(StrategyNode.category_id == category_id)
-        .order_by(StrategyNode.parent_id, StrategyNode.sort_order)
-    ).all())
+    return read_workspace_nodes(session, category_id)
+
+
+def read_workspace_nodes(session: Session, category_id: int | None = None) -> List[StrategyNodeRead]:
+    query = select(StrategyNode).order_by(StrategyNode.category_id, StrategyNode.parent_id, StrategyNode.sort_order)
+    if category_id is not None:
+        query = query.where(StrategyNode.category_id == category_id)
+    nodes = list(session.exec(query).all())
     active_rules = SQL_RECURRENCE_RULE_APPLICATION_SERVICE.get_active_for_tasks(
         session,
         task_ids=[int(node.id) for node in nodes if node.id is not None],
@@ -409,6 +415,7 @@ def create_node(
         category_id=body.category_id,
         node_type=node_type,
         parent_id=body.parent_id,
+        planned_date=body.planned_date,
         deadline_at=body.deadline_at,
         time_estimate_minutes=body.time_estimate_minutes,
         emoji=body.emoji,
@@ -440,6 +447,8 @@ def update_node(
         node.status = body.status
     if body.priority is not None:
         node.priority = body.priority
+    if "planned_date" in body.model_fields_set:
+        node.planned_date = body.planned_date
     if "deadline_at" in body.model_fields_set:
         node.deadline_at = body.deadline_at
     if "time_estimate_minutes" in body.model_fields_set:

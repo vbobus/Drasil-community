@@ -15,6 +15,8 @@ _DEFAULT_FRONTEND_ORIGIN = "http://localhost:5173"
 
 def load_local_env() -> None:
     global _HAS_LOADED_ENV
+    if os.getenv("VERCEL") == "1":
+        return
     if _HAS_LOADED_ENV:
         return
 

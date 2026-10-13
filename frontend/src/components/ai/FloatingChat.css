@@ -1,0 +1,31 @@
+.chat-launcher { position: fixed; right: 24px; bottom: 20px; z-index: 45; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 18px; border: 1px solid var(--color-border-strong); border-radius: 24px; background: var(--color-bg-elevated); color: var(--color-text-primary); font-weight: 650; cursor: pointer; }
+.chat-launcher:hover { background: var(--color-bg-overlay); }
+.chat-launcher small { color: var(--color-text-secondary); }
+.floating-chat { position: fixed; inset: auto 24px 80px auto; z-index: 44; width: min(560px, calc(100vw - 48px)); height: min(720px, calc(100dvh - 112px)); max-width: none; max-height: none; margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; overflow: hidden; background: var(--color-bg-surface); color: var(--color-text-primary); border-radius: 16px; box-shadow: var(--shadow-popover); }
+.floating-chat[hidden], .chat-launcher[hidden] { display: none; }
+.floating-chat::backdrop { background: var(--color-bg-base); }
+.floating-chat.is-dragging-task { opacity: 0.12; pointer-events: none; }
+.floating-chat.is-expanded { width: min(960px, calc(100vw - 48px)); height: calc(100dvh - 112px); }
+.floating-chat-header { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; padding: 8px 16px; border-bottom: 1px solid var(--color-border-subtle); }
+.floating-chat-header > div { display: flex; gap: 4px; }
+.floating-chat-header button { width: 36px; height: 36px; display: grid; place-items: center; background: transparent; color: var(--color-text-secondary); border-radius: 8px; cursor: pointer; }
+.floating-chat-header button:hover { background: var(--color-bg-elevated); color: var(--color-text-primary); }
+.floating-chat .ai-workspace-panel { flex: 1; min-height: 0; border: 0; border-radius: 0; box-shadow: none; }
+.floating-chat .ai-workspace-header { padding: 8px 16px; }
+.floating-chat .ai-workspace-tabs { margin: 0; }
+.floating-chat .strategist-ai-card { border: 0; }
+.chat-launcher:focus-visible, .floating-chat button:focus-visible { outline: 2px solid var(--color-cat-work); outline-offset: 3px; }
+@media (max-width: 1023px) {
+  .chat-launcher { right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); }
+  .floating-chat, .floating-chat.is-expanded { inset: var(--visual-viewport-top, 0px) auto auto var(--visual-viewport-left, 0px); width: var(--visual-viewport-width, 100vw); height: var(--visual-viewport-height, 100dvh); border-radius: 0; box-shadow: none; }
+  .floating-chat-header { padding: max(8px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left)); }
+  .floating-chat-header button { width: 44px; height: 44px; }
+  .floating-chat .ai-workspace-header { padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); flex-shrink: 0; }
+  .floating-chat .strategist-composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .floating-chat :is(input, textarea, select) { font-size: 1rem; }
+  html .floating-chat .strategist-surface .strategist-input-shell textarea { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .floating-chat[open] { animation: floating-chat-enter 180ms cubic-bezier(.16, 1, .3, 1); }
+  @keyframes floating-chat-enter { from { opacity: .6; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+}

@@ -12,6 +12,8 @@ import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import urlparse
+from pathlib import Path
 
 from fastapi import HTTPException
 
@@ -197,7 +199,6 @@ def cleanup_stale_session() -> None:
         if session is None:
             return
         if session.status != "pending":
-            _ACTIVE_SESSIONS.pop(key, None)
             return
         if time.time() - session.started_at > 20 * 60:
             try:
@@ -241,6 +242,75 @@ def get_auth_status() -> dict[str, Any]:
         "providerStatus": codex_status.get("providerStatus", "ready"),
         "pendingSession": serialize_session(session) if session is not None else None,
     }
+
+
+def start_browser_auth() -> dict[str, Any]:
+    """The same app-server browser OAuth flow used by Content Engine.
+
+    This requires a persistent local process with a loopback callback listener.
+    It must not be used inside a short-lived Vercel function.
+    """
+    from app.services.agent_kernel.codex_app_server import CodexAppServerJsonRpcClient
+
+    current = get_auth_status()
+    if current.get("isAuthenticated"):
+        return current
+    key = _active_session_key()
+    with _ACTIVE_SESSION_LOCK:
+        existing = _ACTIVE_SESSIONS.get(key)
+        if existing is not None and existing.status == "pending":
+            return {**current, "pendingSession": serialize_session(existing)}
+        home = Path(account_process_environment()["CODEX_HOME"])
+        client = CodexAppServerJsonRpcClient(codex_path=get_codex_path(), cwd=home, configured_model=None)
+        try:
+            client.__enter__()
+            client.request("initialize", {"clientInfo": {"name": "drasil", "version": "1.0.0"}}, timeout_seconds=15)
+            client.notify("initialized")
+            result = client.request("account/login/start", {"type": "chatgpt"}, timeout_seconds=15)["result"]
+            url = urlparse(result.get("authUrl", ""))
+            login_id = result.get("loginId")
+            if (url.scheme != "https" or url.hostname not in {"auth.openai.com", "auth0.openai.com", "chatgpt.com"}
+                    or url.username or url.password or not isinstance(login_id, str)):
+                raise ValueError("Invalid OpenAI authorization response")
+            session = DeviceAuthSession(
+                session_id=login_id, process=client._process, started_at=time.time(),
+                verification_uri=url.geturl(),
+            )
+            _ACTIVE_SESSIONS[key] = session
+        except Exception as error:
+            client.close()
+            raise HTTPException(502, "Could not open ChatGPT sign-in. Check that Codex is installed and the local callback port is available.") from error
+
+    def monitor():
+        try:
+            deadline = time.monotonic() + 600
+            while session.status == "pending" and time.monotonic() < deadline:
+                event = client.read_message(timeout_seconds=0.5)
+                if event is None:
+                    continue
+                stream, payload = event
+                if stream != "stdout" or not isinstance(payload, dict):
+                    continue
+                params = payload.get("params", {})
+                if payload.get("method") == "account/login/completed" and params.get("loginId") == login_id:
+                    with session.lock:
+                        session.status = "completed" if params.get("success") else "failed"
+                        session.error = None if params.get("success") else "ChatGPT sign-in did not finish. Try again."
+                    return
+            with session.lock:
+                if session.status == "pending":
+                    session.status = "failed"
+                    session.error = "ChatGPT sign-in expired. Try again."
+        except Exception:
+            with session.lock:
+                if session.status == "pending":
+                    session.status = "failed"
+                    session.error = "The ChatGPT sign-in connection closed. Try again."
+        finally:
+            client.close()
+
+    threading.Thread(target=monitor, daemon=True).start()
+    return {**current, "pendingSession": serialize_session(session)}
 
 
 def start_device_auth() -> dict[str, Any]:

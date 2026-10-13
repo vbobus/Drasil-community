@@ -344,6 +344,7 @@ STRUCTURAL_OPERATION_INPUT_SCHEMA: dict[str, Any] = {
             "properties": {
                 "title": {"type": ["string", "null"]},
                 "notes": {"type": ["string", "null"]},
+                "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
                 "deadline_at": {"type": ["string", "null"]},
                 "priority": {"type": ["string", "null"]},
                 "status": {"type": ["string", "null"]},
@@ -398,6 +399,7 @@ STRUCTURAL_OPERATION_INPUT_SCHEMA: dict[str, Any] = {
             "description": "One-based ordering alias for target_index.",
         },
         "notes": {"type": ["string", "null"]},
+        "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
         "deadline_at": {
             "type": ["string", "null"],
             "description": "ISO date YYYY-MM-DD for create_node or metadata_update.",
@@ -437,6 +439,7 @@ STRUCTURAL_OPERATION_INPUT_SCHEMA: dict[str, Any] = {
             "properties": {
                 "title": {"type": ["string", "null"]},
                 "notes": {"type": ["string", "null"]},
+                "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
                 "deadline_at": {"type": ["string", "null"]},
                 "priority": {"type": ["string", "null"]},
                 "status": {"type": ["string", "null"]},
@@ -1325,6 +1328,7 @@ KERNEL_ONLY_TOOL_SPECS: list[KernelToolSpec] = [
                                     "notes": {"type": ["string", "null"]},
                                     "status": {"type": ["string", "null"]},
                                     "priority": {"type": ["string", "null"]},
+                                    "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
                                     "deadline_at": {"type": ["string", "null"]},
                                     "time_estimate_minutes": {"type": ["integer", "null"]},
                                     "tags": {"type": ["array", "null"], "items": {"type": "string"}},
@@ -1671,6 +1675,7 @@ KERNEL_ONLY_TOOL_SPECS: list[KernelToolSpec] = [
                         "notes": {"type": ["string", "null"]},
                         "status": {"type": ["string", "null"]},
                         "priority": {"type": ["string", "null"]},
+                        "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
                         "deadline_at": {
                             "type": ["string", "null"],
                             "description": (
@@ -1700,6 +1705,7 @@ KERNEL_ONLY_TOOL_SPECS: list[KernelToolSpec] = [
                                     "notes": {"type": ["string", "null"]},
                                     "status": {"type": ["string", "null"]},
                                     "priority": {"type": ["string", "null"]},
+                                    "planned_date": {"type": ["string", "null"], "description": "Planned calendar day YYYY-MM-DD, no set time; independent of the deadline."},
                                     "deadline_at": {
                                         "type": ["string", "null"],
                                         "description": (
@@ -4682,6 +4688,7 @@ def _normalize_tree_operation_tool_argument(
             "categoryId",
             "status",
             "priority",
+            "planned_date",
             "deadline_at",
             "deadlineAt",
             "notes",
@@ -4853,6 +4860,7 @@ def _normalize_tree_operation_tool_argument(
             "categoryName",
             "status",
             "priority",
+            "planned_date",
             "deadline_at",
             "deadlineAt",
             "notes",
@@ -4962,6 +4970,7 @@ def _normalize_tree_operation_tool_argument(
         for field_name in (
             "title",
             "notes",
+            "planned_date",
             "deadline_at",
             "priority",
             "status",

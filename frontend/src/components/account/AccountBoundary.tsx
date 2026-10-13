@@ -28,6 +28,8 @@ import {
 import drasilLogoUrl from '../../assets/drasil-logo-transparent.png';
 import { AccountContext, type AccountContextValue } from './AccountContext';
 import './AccountBoundary.css';
+import { initializeWorkspace } from '../../store/useWorkspaceStore';
+import { ApiError } from '../../api/http';
 
 type AccountPhase = 'checking' | 'bootstrap' | 'login' | 'ready';
 
@@ -227,14 +229,29 @@ export function AccountBoundary({ children }: { children: ReactNode }) {
     setPhase('checking');
     setConnectionError(null);
     try {
+      // A known session needs verification, not a serial public status probe.
+      if (getSessionToken() || getRememberedAccount()) {
+        try {
+          const current = await fetchCurrentAccount();
+          initializeWorkspace(current);
+          setAccount(current);
+          setPhase('ready');
+          return;
+        } catch (error) {
+          if (!(error instanceof ApiError) || error.status !== 401) throw error;
+          clearSession();
+        }
+      }
       const status = await fetchAccountStatus();
       if (!status.authenticationRequired) {
-        setAccount({
+        const current = {
           id: 'isolated-test-account',
           username: 'test-user',
           displayName: 'Test User',
           isAdmin: true,
-        });
+        };
+        initializeWorkspace(current);
+        setAccount(current);
         setPhase('ready');
         return;
       }
@@ -244,9 +261,10 @@ export function AccountBoundary({ children }: { children: ReactNode }) {
         setPhase('bootstrap');
         return;
       }
-      if (getSessionToken()) {
+      if (getSessionToken() || status.cookieSessions) {
         try {
           const current = await fetchCurrentAccount();
+          initializeWorkspace(current);
           setAccount(current);
           setPhase('ready');
           return;

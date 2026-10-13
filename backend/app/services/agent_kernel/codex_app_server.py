@@ -350,8 +350,14 @@ class CodexAppServerJsonRpcClient:
         self._messages: queue.Queue[tuple[str, str]] = queue.Queue()
         self._pending_messages: deque[tuple[str, dict[str, Any] | str]] = deque()
         self._next_request_id = 1
+        self._sandbox_transport = None
 
     def __enter__(self) -> "CodexAppServerJsonRpcClient":
+        from app.services.codex_sandbox import enabled, SandboxTransport
+        if enabled():
+            self._sandbox_transport = SandboxTransport(self._messages)
+            self._sandbox_transport.start()
+            return self
         command = [
             self.codex_path,
             "app-server",
@@ -377,6 +383,10 @@ class CodexAppServerJsonRpcClient:
         self.close()
 
     def close(self) -> None:
+        if self._sandbox_transport is not None:
+            self._sandbox_transport.close()
+            self._sandbox_transport = None
+            return
         process = self._process
         if process is None:
             return
@@ -401,6 +411,9 @@ class CodexAppServerJsonRpcClient:
         threading.Thread(target=reader, daemon=True).start()
 
     def _send(self, payload: dict[str, Any]) -> None:
+        if self._sandbox_transport is not None:
+            self._sandbox_transport.send(payload)
+            return
         process = self._process
         if process is None or process.stdin is None:
             raise CodexAppServerUnavailableError("Codex app-server is not running.")
@@ -408,6 +421,9 @@ class CodexAppServerJsonRpcClient:
         process.stdin.flush()
 
     def request(self, method: str, params: dict[str, Any], *, timeout_seconds: float) -> dict[str, Any]:
+        if self._sandbox_transport is not None:
+            from app.core.hosted_budget import remaining_timeout
+            timeout_seconds = remaining_timeout(timeout_seconds)
         request_id = self._next_request_id
         self._next_request_id += 1
         self._send(
@@ -446,6 +462,9 @@ class CodexAppServerJsonRpcClient:
         )
 
     def read_message(self, *, timeout_seconds: float) -> tuple[str, dict[str, Any] | str] | None:
+        if self._sandbox_transport is not None:
+            from app.core.hosted_budget import remaining_timeout
+            remaining_timeout(1)
         if self._pending_messages:
             return self._pending_messages.popleft()
         try:
@@ -478,6 +497,12 @@ class CodexAppServerJsonRpcClient:
         return parsed
 
     def _raise_if_exited(self, stderr_preview: list[str]) -> None:
+        if self._sandbox_transport is not None:
+            try:
+                self._sandbox_transport.check()
+            except RuntimeError as error:
+                raise CodexAppServerUnavailableError(str(error)) from error
+            return
         process = self._process
         if process is not None and process.poll() is not None:
             stderr = "\n".join(stderr_preview[-5:])
@@ -662,6 +687,7 @@ def _compact_task_for_dynamic_tool_result(value: Any) -> dict[str, Any] | None:
         "priority",
         "priority_label",
         "deadline",
+        "planned_date",
         "deadline_at",
         "estimate",
         "time_estimate_minutes",
@@ -913,6 +939,8 @@ def invoke_codex_app_server_json_schema(
         idle_timeout_seconds=idle_timeout,
         runtime_timeout_seconds=runtime_timeout,
     )
+    from app.services.agent_stream import PublicAnswerStream, emit_progress, check_cancelled
+    public_answer = PublicAnswerStream()
     delta_text_parts: list[str] = []
     completed_text_parts: list[str] = []
     last_error_detail: str | None = None
@@ -987,6 +1015,7 @@ def invoke_codex_app_server_json_schema(
                 )
             read_timeout = max(0.1, min(1.0, remaining_idle, remaining_runtime))
 
+            check_cancelled()
             event = client.read_message(timeout_seconds=read_timeout)
             if event is None:
                 continue
@@ -1033,10 +1062,15 @@ def invoke_codex_app_server_json_schema(
                 trace.progress_event_count += 1
                 idle_deadline = monotonic() + idle_timeout
 
+            if method == "item/reasoning/summaryPartAdded":
+                emit_progress("reasoning", "\n\n")
+            if method in {"reasoningSummaryText/delta", "item/reasoning/summaryTextDelta"} and isinstance(params, dict):
+                emit_progress("reasoning", str(params.get("delta") or ""))
             if method in {"agentMessage/delta", "item/agentMessage/delta"} and isinstance(params, dict):
                 delta = params.get("delta")
                 if isinstance(delta, str):
                     delta_text_parts.append(delta)
+                    public_answer.append(delta)
                 continue
             if method == "rawResponseItem/completed" and isinstance(params, dict):
                 text = _extract_output_text_from_raw_response_item(params.get("item"))
@@ -1151,6 +1185,8 @@ def invoke_codex_app_server_native_tool_loop(
         idle_timeout_seconds=idle_timeout,
         runtime_timeout_seconds=runtime_timeout,
     )
+    from app.services.agent_stream import PublicAnswerStream, emit_progress, check_cancelled
+    public_answer = PublicAnswerStream()
     delta_text_parts: list[str] = []
     completed_text_parts: list[str] = []
     last_error_detail: str | None = None
@@ -1257,6 +1293,7 @@ def invoke_codex_app_server_native_tool_loop(
                 )
             read_timeout = max(0.1, min(1.0, remaining_idle, remaining_runtime))
 
+            check_cancelled()
             event = client.read_message(timeout_seconds=read_timeout)
             if event is None:
                 continue
@@ -1309,6 +1346,8 @@ def invoke_codex_app_server_native_tool_loop(
                         )
                         continue
                     tool_name = str(call["tool_name"])
+                    from app.services.strategist_runs import _public_tool_activity
+                    emit_progress("activity", _public_tool_activity(tool_name))
                     arguments = call["arguments"] if isinstance(call["arguments"], dict) else {}
                     trace.dynamic_tool_call_count += 1
                     trace.dynamic_tool_names.append(tool_name)
@@ -1490,10 +1529,15 @@ def invoke_codex_app_server_native_tool_loop(
                 trace.progress_event_count += 1
                 idle_deadline = monotonic() + idle_timeout
 
+            if method == "item/reasoning/summaryPartAdded":
+                emit_progress("reasoning", "\n\n")
+            if method in {"reasoningSummaryText/delta", "item/reasoning/summaryTextDelta"} and isinstance(params, dict):
+                emit_progress("reasoning", str(params.get("delta") or ""))
             if method in {"agentMessage/delta", "item/agentMessage/delta"} and isinstance(params, dict):
                 delta = params.get("delta")
                 if isinstance(delta, str):
                     delta_text_parts.append(delta)
+                    public_answer.append(delta)
                 continue
             if method == "rawResponseItem/completed" and isinstance(params, dict):
                 text = _extract_output_text_from_raw_response_item(params.get("item"))

@@ -25,6 +25,7 @@ class StrategyNode(SQLModel, table=True):
     priority: str = Field(default="medium")  # low | medium | high
     node_type: str = Field(default="task")  # task | habit (legacy strategy values may still exist)
     parent_id: Optional[int] = Field(default=None, foreign_key="strategy_nodes.id")
+    planned_date: Optional[str] = Field(default=None, max_length=10)
     deadline_at: Optional[str] = Field(default=None, max_length=32)
     time_estimate_minutes: Optional[int] = Field(default=None)
     emoji: Optional[str] = Field(default=None, max_length=16)

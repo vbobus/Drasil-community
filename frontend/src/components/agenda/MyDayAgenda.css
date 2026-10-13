@@ -534,6 +534,10 @@
     flex-direction: column;
   }
 
+  .my-day-header-actions button { min-height: 44px; }
+  .my-day-date-nav > button:first-child,
+  .my-day-date-nav > button:last-child { width: 44px; }
+
   .my-day-header-actions .my-day-calendar-button {
     margin-left: 0;
   }
@@ -552,20 +556,50 @@
   }
 
   .my-day-timeline > li {
-    grid-template-columns: 76px 12px minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+    margin-bottom: 14px;
   }
 
   .my-day-timeline > li > time {
-    padding-right: 9px;
-    font-size: 0.6rem;
+    padding: 0;
+    font-size: 0.75rem;
+    text-align: left;
+    white-space: normal;
   }
 
+  .my-day-timeline-node { display: none; }
+
   .my-day-agenda-card {
-    margin-left: 7px;
+    margin: 0;
+    align-items: flex-start;
   }
+
+  .my-day-complete-button { position: relative; width: 44px; height: 44px; margin: 8px 0 0 4px; border: 0; background: transparent; color: white; }
+  .my-day-complete-button::before { content: ''; position: absolute; inset: 11px; border: 1.5px solid var(--color-border-strong); border-radius: 6px; background: var(--color-bg-surface); }
+  .my-day-complete-button[aria-pressed='true'] { border: 0; background: transparent; }
+  .my-day-complete-button[aria-pressed='true']::before { border-color: #4b72df; background: #4b72df; }
+  .my-day-complete-button > svg { position: relative; }
+  html[data-theme='dark'] .my-day-agenda .my-day-complete-button { border: 0; background: transparent; }
+  .my-day-complete-button:focus-visible { outline: 2px solid var(--color-state-info); outline-offset: 1px; }
+  .my-day-complete-button, .my-day-header-actions button, .my-day-agenda-card-main { touch-action: manipulation; }
+  .my-day-agenda-card-main { display: grid; grid-template-columns: 29px minmax(0, 1fr) auto; gap: 6px 8px; align-items: start; padding: 12px 10px 12px 4px; }
+  .my-day-task-copy strong { overflow-wrap: anywhere; white-space: normal; font-size: .9375rem; line-height: 1.4; }
+  .my-day-task-copy > span { font-size: .75rem; }
+  .my-day-agenda-card-main > svg { grid-column: 3; grid-row: 1; margin-top: 6px; }
 
   .my-day-status,
   .my-day-recurring {
-    display: none;
+    display: inline-flex;
+    justify-self: start;
+    grid-column: 2 / -1;
+    font-size: .6875rem;
   }
+}
+
+@media (pointer: coarse) {
+  .my-day-complete-button { min-width: 44px; min-height: 44px; }
+  .my-day-header-actions button { min-height: 44px; }
+  .my-day-date-nav > button:first-child,
+  .my-day-date-nav > button:last-child { min-width: 44px; }
 }

@@ -109,6 +109,7 @@ def _fields_from_structural_create(operation: dict[str, Any]) -> dict[str, Any]:
         "notes",
         "priority",
         "status",
+        "planned_date",
         "deadline_at",
         "time_estimate_minutes",
         "emoji",

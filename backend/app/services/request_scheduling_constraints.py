@@ -37,6 +37,24 @@ WEEKDAY_NAMES = {
 }
 
 
+def constraint_safe_slot_minutes(requested: int, constraints: Any) -> int:
+    """An exact appointment owns its clock time, never the solver's grid.
+
+    A coarse model-supplied grid can round 12:45 up to 13:00 before validation,
+    falsely rejecting a valid appointment. Minute precision also preserves the
+    appointment's duration rather than rounding it up to a grid-sized block.
+    This changes solver resolution only; bounds and conflict checks still apply.
+    """
+    if isinstance(constraints, list) and any(
+        isinstance(item, dict)
+        and item.get('kind') == 'exact_start'
+        and item.get('hard', True)
+        for item in constraints
+    ):
+        return 1
+    return requested
+
+
 def _local_datetime(value: Any) -> datetime | None:
     if not isinstance(value, str) or not value.strip():
         return None

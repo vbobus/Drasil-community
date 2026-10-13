@@ -50,6 +50,7 @@ class TaskFields(ContractModel):
     priority: TaskPriority | None = None
     status: TaskStatus | None = None
     estimate_minutes: int | None = Field(default=None, ge=1, le=10_080)
+    planned_date: date | None = None
     deadline_at: datetime | None = None
     is_backlog: bool | None = None
     tags: list[str] | None = Field(default=None, max_length=128)
@@ -73,7 +74,7 @@ class TaskFields(ContractModel):
 
 class TaskUpdatePatch(TaskFields):
     title: str | None = Field(default=None, min_length=1, max_length=500)
-    clear_fields: list[Literal["notes", "deadline_at"]] = Field(default_factory=list, max_length=2)
+    clear_fields: list[Literal["notes", "deadline_at", "planned_date"]] = Field(default_factory=list, max_length=3)
 
     @model_validator(mode="after")
     def validate_nonempty(self) -> "TaskUpdatePatch":

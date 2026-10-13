@@ -42,6 +42,7 @@ interface SelectedTasksPanelProps {
 type SelectedDropIntent = 'before' | 'after';
 
 const utilityModeCopy: Record<Exclude<AppDestination, 'all' | 'category'>, string> = {
+  habits: 'Track check-ins in Habits. Your selected tasks stay ready for planning.',
   'my-day':
     'My Day should summarize the work you are actually steering today without pretending those items are a separate category.',
   inbox:

@@ -231,7 +231,7 @@ def mark_strategist_run_started(session: Session, run: StrategistRun) -> bool:
             started_at=run.started_at or now,
             updated_at=now,
             worker_token=token,
-            lease_expires_at=now + timedelta(minutes=2),
+            lease_expires_at=now + timedelta(minutes=6),
         )
     )
     session.commit()

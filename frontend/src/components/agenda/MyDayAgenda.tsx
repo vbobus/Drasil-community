@@ -128,7 +128,7 @@ export function MyDayAgenda({
   const dayEnd = useMemo(() => addDays(dayStart, 1), [dayStart]);
 
   useEffect(() => {
-    void fetchBlocks(toLocalIsoMinute(dayStart), toLocalIsoMinute(dayEnd));
+    void fetchBlocks(toLocalIsoMinute(dayStart), toLocalIsoMinute(dayEnd), { force: false });
   }, [dayEnd, dayStart, fetchBlocks]);
 
   useEffect(() => {

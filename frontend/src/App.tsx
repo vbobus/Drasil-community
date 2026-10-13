@@ -1,24 +1,38 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   KeyboardEvent as ReactKeyboardEvent,
+  CSSProperties,
   PointerEvent as ReactPointerEvent,
   ReactNode,
 } from 'react';
 import './styles/globals.css';
 import './App.css';
+import './styles/workspace-refinement.css';
+import './styles/mobile-workspace.css';
+import { FloatingChat } from './components/ai/FloatingChat';
+import { useCompanionCount } from './components/ai/useCompanionCount';
+import { TaskComposer } from './components/planning/TaskComposer';
+import { SettingsDialog } from './components/settings/SettingsDialog';
 import { CalendarPanel } from './components/calendar/CalendarPanel';
 import type { CalendarPointerDropHandler } from './components/calendar/CalendarPanel';
 import { AppSidebar } from './components/sidebar/AppSidebar';
+import { MobileNavigation } from './components/sidebar/MobileNavigation';
+import { useMediaQuery } from './hooks/useMediaQuery';
+import { useVisualViewport } from './hooks/useVisualViewport';
 import { PlanningWorkspacePanel } from './components/planning/PlanningWorkspacePanel';
-import { StrategistAiCard } from './components/planning/StrategistAiCard';
 import { SelectedTasksPanel } from './components/selected/SelectedTasksPanel';
 import { MyDayAgenda } from './components/agenda/MyDayAgenda';
 import { useCategoryStore } from './store/useCategoryStore';
 import { useCalendarStore } from './store/useCalendarStore';
 import { useNodeStore } from './store/useNodeStore';
 import { useUiStore } from './store/useUiStore';
+import { refreshWorkspace, useWorkspaceStore } from './store/useWorkspaceStore';
 import type { NodeDragPayload, NodeStatus, StrategyNode } from './types/node';
 import type { Category } from './types/category';
+
+const StrategistAiCard = lazy(() => import('./components/planning/StrategistAiCard').then(module => ({ default: module.StrategistAiCard })));
+const CompanionPanel = lazy(() => import('./components/ai/CompanionPanel').then(module => ({ default: module.CompanionPanel })));
+const HabitsPage = lazy(() => import('./components/habits/HabitsPage').then(module => ({ default: module.HabitsPage })));
 import { suggestEmoji } from './lib/emoji';
 import { isArchivedNode, isActiveTreeNode, isBacklogTreeNode } from './lib/nodeState';
 
@@ -30,14 +44,15 @@ const FutureStatePreview = lazy(() =>
 
 export interface AiWorkspaceLaunchRequest {
   requestId: string;
-  source: 'custom_schedule' | 'schedule_proposal_action';
+  source: 'custom_schedule' | 'schedule_proposal_action' | 'companion';
+  prompt?: string;
   stagedNodeIds: string[];
   proposalId?: string;
   action?: 'approve' | 'edit' | 'reject';
 }
 
 type PanelKey = 'planning' | 'ai' | 'calendar';
-type AiWorkspaceTab = 'chat' | 'selected';
+type AiWorkspaceTab = 'chat' | 'selected' | 'companion';
 type ResizeBoundary = 'planning-ai' | 'ai-calendar';
 
 interface WorkspacePanelWidths {
@@ -45,14 +60,7 @@ interface WorkspacePanelWidths {
   ai: number;
 }
 
-const PANEL_RAIL_WIDTH = '42px';
-const PLANNING_EXPANDED_WIDTH = 'minmax(0, 1.24fr)';
-const AI_BASE_WIDTH = 'minmax(360px, 0.98fr)';
-const AI_EXPANDED_WIDTH = 'minmax(0, 1.12fr)';
-const CALENDAR_BASE_WIDTH = 'minmax(360px, 1.08fr)';
-const CALENDAR_EXPANDED_WIDTH = 'minmax(0, 1.28fr)';
-const EQUAL_SHARE_WIDTH = 'minmax(0, 1fr)';
-const DEFAULT_PANEL_WIDTHS: WorkspacePanelWidths = { planning: 350, ai: 380 };
+const DEFAULT_PANEL_WIDTHS: WorkspacePanelWidths = { planning: 300, ai: 380 };
 const PANEL_WIDTH_STORAGE_KEY = 'drasil.workspace-panel-widths.v1';
 
 function clampPanelWidth(value: number, minimum: number, maximum: number) {
@@ -65,7 +73,8 @@ function loadPanelWidths(): WorkspacePanelWidths {
     if (!stored) return DEFAULT_PANEL_WIDTHS;
     const parsed = JSON.parse(stored) as Partial<WorkspacePanelWidths>;
     return {
-      planning: clampPanelWidth(parsed.planning ?? DEFAULT_PANEL_WIDTHS.planning, 330, 620),
+      // Carry the previous default forward to the compact tree; retain custom widths.
+      planning: clampPanelWidth(parsed.planning === 350 ? 300 : parsed.planning ?? DEFAULT_PANEL_WIDTHS.planning, 270, 620),
       ai: clampPanelWidth(parsed.ai ?? DEFAULT_PANEL_WIDTHS.ai, 360, 720),
     };
   } catch {
@@ -121,49 +130,6 @@ function RailIcon({ panelKey }: { panelKey: PanelKey }) {
   );
 }
 
-function getDesktopShellColumns(
-  isSidebarCollapsed: boolean,
-  collapsedPanels: Record<PanelKey, boolean>,
-  panelWidths: WorkspacePanelWidths,
-) {
-  const withBoundaries = (planning: string, ai: string, calendar: string) =>
-    `${planning} 10px ${ai} 10px ${calendar}`;
-  const aiBase = AI_BASE_WIDTH;
-  const calendarBase = isSidebarCollapsed
-    ? 'minmax(360px, 1.18fr)'
-    : CALENDAR_BASE_WIDTH;
-  const planningExpanded = isSidebarCollapsed
-    ? 'minmax(0, 1.3fr)'
-    : PLANNING_EXPANDED_WIDTH;
-  const calendarExpanded = isSidebarCollapsed
-    ? 'minmax(0, 1.36fr)'
-    : CALENDAR_EXPANDED_WIDTH;
-
-  if (collapsedPanels.planning && collapsedPanels.ai && collapsedPanels.calendar) {
-    return withBoundaries(PANEL_RAIL_WIDTH, PANEL_RAIL_WIDTH, PANEL_RAIL_WIDTH);
-  }
-  if (collapsedPanels.planning && collapsedPanels.ai) {
-    return withBoundaries(PANEL_RAIL_WIDTH, PANEL_RAIL_WIDTH, 'minmax(0, 1fr)');
-  }
-  if (collapsedPanels.planning && collapsedPanels.calendar) {
-    return withBoundaries(PANEL_RAIL_WIDTH, AI_EXPANDED_WIDTH, PANEL_RAIL_WIDTH);
-  }
-  if (collapsedPanels.ai && collapsedPanels.calendar) {
-    return withBoundaries('minmax(0, 1fr)', PANEL_RAIL_WIDTH, PANEL_RAIL_WIDTH);
-  }
-  if (collapsedPanels.planning) {
-    return withBoundaries(PANEL_RAIL_WIDTH, aiBase, calendarExpanded);
-  }
-  if (collapsedPanels.ai) {
-    return withBoundaries(EQUAL_SHARE_WIDTH, PANEL_RAIL_WIDTH, EQUAL_SHARE_WIDTH);
-  }
-  if (collapsedPanels.calendar) {
-    return withBoundaries(planningExpanded, aiBase, PANEL_RAIL_WIDTH);
-  }
-
-  return withBoundaries(`${panelWidths.planning}px`, `${panelWidths.ai}px`, calendarBase);
-}
-
 function flattenNodes(nodes: StrategyNode[]): StrategyNode[] {
   return nodes.flatMap((node) => [node, ...flattenNodes(node.children)]);
 }
@@ -172,6 +138,7 @@ function buildCompletionCascadeUpdates(
   id: string,
   done: boolean,
   nodes: StrategyNode[],
+  scopeIds?: ReadonlySet<string>,
 ): Record<string, NodeStatus> {
   const flatNodes = flattenNodes(nodes);
   const nodeById = new Map(flatNodes.map((node) => [node.id, node]));
@@ -184,8 +151,12 @@ function buildCompletionCascadeUpdates(
 
   const updates = new Map<string, NodeStatus>();
   const setSubtreeStatus = (node: StrategyNode) => {
-    updates.set(node.id, targetStatus);
     node.children.forEach(setSubtreeStatus);
+    if (!scopeIds || scopeIds.has(node.id)) {
+      updates.set(node.id, scopeIds && node.children.length
+        ? node.children.every(child => (updates.get(child.id) ?? child.status) === 'done') ? 'done' : 'todo'
+        : targetStatus);
+    }
   };
 
   setSubtreeStatus(targetNode);
@@ -241,6 +212,9 @@ interface CalendarTreeFocusRequest {
 }
 
 function App() {
+  useVisualViewport();
+  const isCompactPanelLayout = useMediaQuery('(max-width: 1023px)');
+  const { ready: workspaceReady, legacy: legacyLoading, error: workspaceError } = useWorkspaceStore();
   const shouldShowFutureStatePreview =
     new URLSearchParams(window.location.search).get('preview') === 'future-state';
 
@@ -252,13 +226,27 @@ function App() {
     fetchCategories,
     setActiveCategory,
   } = useCategoryStore();
-  const { activeDestination, setActiveDestination } = useUiStore();
+  const { activeDestination, setActiveDestination, isSettingsOpen } = useUiStore();
   const nodes = useNodeStore((state) => state.nodes);
   const isNodesLoading = useNodeStore((state) => state.isLoading);
   const nodeError = useNodeStore((state) => state.error);
+  const companionCount = useCompanionCount(workspaceReady || (legacyLoading && !isCatLoading && !isNodesLoading && categories.length > 0));
   const fetchNodes = useNodeStore((state) => state.fetchNodes);
   const fetchAllNodes = useNodeStore((state) => state.fetchAllNodes);
-  const addNode = useNodeStore((state) => state.addNode);
+  const [taskComposer, setTaskComposer] = useState<{ categoryId: number; day?: string } | null>(null);
+  const [planningDay, setPlanningDay] = useState<string | null>(null);
+  const [calendarFocusDay, setCalendarFocusDay] = useState<string | null>(null);
+  const calendarViewMode = useCalendarStore(state => state.viewMode);
+  const handlePlanningDayChange = useCallback((day: string | null) => {
+    setPlanningDay(day);
+    if (day) {
+      setCalendarFocusDay(day);
+    }
+  }, []);
+  const handleCalendarDayChange = useCallback((day: string | null) => {
+    setCalendarFocusDay(day);
+    if (planningDay !== null) handlePlanningDayChange(day);
+  }, [planningDay, handlePlanningDayChange]);
   const updateNode = useNodeStore((state) => state.updateNode);
   const updateNodeStatuses = useNodeStore((state) => state.updateNodeStatuses);
   const categoryNodeCache = useNodeStore((state) => state.categoryNodeCache);
@@ -286,13 +274,14 @@ function App() {
   const [isBacklogExpanded, setIsBacklogExpanded] = useState(false);
   const [isArchivedExpanded, setIsArchivedExpanded] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
   const [collapsedPanels, setCollapsedPanels] = useState<Record<PanelKey, boolean>>({
     planning: false,
     ai: false,
     calendar: false,
   });
   const [panelWidths, setPanelWidths] = useState<WorkspacePanelWidths>(loadPanelWidths);
+  const [responsivePanel, setResponsivePanel] = useState<PanelKey>('planning');
+  const [chatOpen, setChatOpen] = useState(false);
   const [aiWorkspaceTab, setAiWorkspaceTab] = useState<AiWorkspaceTab>('chat');
   const [aiContextTask, setAiContextTask] = useState<StrategyNode | null>(null);
   const [aiWorkspaceLaunch, setAiWorkspaceLaunch] = useState<AiWorkspaceLaunchRequest | null>(null);
@@ -304,49 +293,46 @@ function App() {
     () => categories.map((category) => category.id),
     [categories],
   );
+  const measuredFirstPaint = useRef(false);
+  const resizeCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => resizeCleanup.current?.(), []);
+  useEffect(() => {
+    if ((!workspaceReady && !legacyLoading) || isNodesLoading || categories.length === 0) return;
+    const frame = requestAnimationFrame(() => {
+      if (!measuredFirstPaint.current) {
+        measuredFirstPaint.current = true;
+        performance.measure('drasil:reload-to-tasks', { start: 0, end: performance.now() });
+      }
+      const switches = performance.getEntriesByName('drasil:category-switch-start');
+      const latest = switches.at(-1);
+      if (latest) {
+        performance.measure('drasil:category-to-tasks', { start: latest.startTime, end: performance.now() });
+        performance.clearMarks('drasil:category-switch-start');
+      }
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeCategory?.id, categories.length, isNodesLoading, legacyLoading, nodes, workspaceReady]);
 
   useEffect(() => {
+    if (document.body.classList.contains('is-resizing-workspace')) return;
     window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, JSON.stringify(panelWidths));
   }, [panelWidths]);
 
   useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
+    if (legacyLoading) void fetchCategories();
+    else void refreshWorkspace();
+  }, [fetchCategories, legacyLoading]);
 
   useEffect(() => {
+    if (!legacyLoading && !workspaceReady) return;
     if (activeDestination === 'category' && activeCategory) {
-      void fetchNodes(activeCategory.id);
+      void fetchNodes(activeCategory.id, { force: false });
       return;
     }
     if (activeDestination === 'all') {
-      void fetchAllNodes(categoryIds);
+      void fetchAllNodes(categoryIds, { force: false });
     }
-  }, [activeCategory, activeDestination, categoryIds, fetchAllNodes, fetchNodes]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setViewportWidth(window.innerWidth);
-    };
-
-    window.addEventListener('resize', handleResize);
-    return () => {
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!nodeError) {
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
-      clearError();
-    }, 3600);
-
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [clearError, nodeError]);
+  }, [activeCategory, activeDestination, categoryIds, fetchAllNodes, fetchNodes, legacyLoading, workspaceReady]);
 
   const flatNodes = useMemo(() => flattenNodes(nodes), [nodes]);
   const cachedFlatNodes = useMemo(
@@ -411,7 +397,7 @@ function App() {
     clearScheduleDraft();
   }, [clearScheduleDraft, stagedTaskKey]);
 
-  const handleStatusChange = useCallback(async (id: string, done: boolean) => {
+  const handleStatusChange = useCallback(async (id: string, done: boolean, scopeIds?: string[]) => {
     const currentCache = useNodeStore.getState().categoryNodeCache;
     const currentRootNodes = Object.values(currentCache).flat();
     const fallbackRootNodes = useNodeStore.getState().nodes;
@@ -419,6 +405,7 @@ function App() {
       id,
       done,
       currentRootNodes.length > 0 ? currentRootNodes : fallbackRootNodes,
+      scopeIds ? new Set(scopeIds) : undefined,
     );
     try {
       await updateNodeStatuses(cascadeUpdates);
@@ -441,14 +428,8 @@ function App() {
   }, [updateNode]);
 
   const handleAddNode = useCallback(() => {
-    if (activeDestination === 'category' && activeCategory) {
-      addNode({
-        title: 'New Task',
-        categoryId: activeCategory.id,
-        nodeType: 'task',
-      });
-    }
-  }, [activeCategory, activeDestination, addNode]);
+    if (activeCategory) setTaskComposer({ categoryId: activeCategory.id });
+  }, [activeCategory]);
 
   const registerCalendarPointerDrop = useCallback(
     (handler: CalendarPointerDropHandler | null) => {
@@ -465,6 +446,7 @@ function App() {
 
   const handleCalendarTaskFocus = useCallback(
     (taskId: string, categoryId: number) => {
+      setResponsivePanel('planning');
       const category = categoryById.get(categoryId);
       if (category) {
         setActiveCategory(category);
@@ -492,6 +474,7 @@ function App() {
   const handleOpenCalendarFromAgenda = useCallback(() => {
     useCalendarStore.getState().setViewMode('day');
     setActiveDestination('category');
+    setResponsivePanel('calendar');
     setCollapsedPanels((current) =>
       current.calendar ? { ...current, calendar: false } : current,
     );
@@ -511,6 +494,7 @@ function App() {
     action: 'approve' | 'edit' | 'reject',
   ) => {
     setCollapsedPanels((current) => ({ ...current, ai: false }));
+    setChatOpen(true);
     setAiWorkspaceTab('chat');
     setAiWorkspaceLaunch({
       requestId: `schedule-action-${Date.now()}-${proposalId}-${action}`,
@@ -563,17 +547,12 @@ function App() {
 
   const currentAccentColor =
     activeDestination === 'all' ? '#6366f1' : activeCategory?.accentColor ?? '#6366f1';
-  const isHorizontalPanelLayout = viewportWidth > 767;
-  const isResizablePanelLayout = viewportWidth >= 1280;
-  const appShellStyle = isResizablePanelLayout
-    ? {
-        gridTemplateColumns: getDesktopShellColumns(
-          isSidebarCollapsed,
-          collapsedPanels,
-          panelWidths,
-        ),
-      }
-    : undefined;
+  const isHorizontalPanelLayout = !isCompactPanelLayout;
+  const isResizablePanelLayout = !isCompactPanelLayout;
+  const appShellStyle = {
+    '--preferred-tree-panel-width': `${panelWidths.planning}px`,
+    '--preferred-calendar-panel-width': `${panelWidths.ai}px`,
+  } as CSSProperties;
 
   const togglePanelCollapse = (panelKey: PanelKey) => {
     setCollapsedPanels((current) => ({
@@ -587,7 +566,7 @@ function App() {
       ...current,
       planning:
         boundary === 'planning-ai'
-          ? clampPanelWidth(current.planning + delta, 330, 620)
+          ? clampPanelWidth(current.planning + delta, 270, 620)
           : current.planning,
       ai:
         boundary === 'ai-calendar'
@@ -600,32 +579,45 @@ function App() {
     boundary: ResizeBoundary,
     event: ReactPointerEvent<HTMLDivElement>,
   ) => {
+    if (event.button !== 0) return;
+    resizeCleanup.current?.();
     event.preventDefault();
     const startX = event.clientX;
     const startWidths = panelWidths;
+    const pointerId = event.pointerId;
+    let frame = 0;
+    let latestWidths = startWidths;
     const handlePointerMove = (moveEvent: PointerEvent) => {
+      if (moveEvent.pointerId !== pointerId) return;
       const delta = moveEvent.clientX - startX;
-      setPanelWidths({
+      latestWidths = {
         planning:
           boundary === 'planning-ai'
-            ? clampPanelWidth(startWidths.planning + delta, 330, 620)
+            ? clampPanelWidth(startWidths.planning + delta, 270, 620)
             : startWidths.planning,
         ai:
           boundary === 'ai-calendar'
-            ? clampPanelWidth(startWidths.ai + delta, 360, 720)
+            ? clampPanelWidth(startWidths.ai - delta, 360, 720)
             : startWidths.ai,
-      });
+      };
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; setPanelWidths(latestWidths); });
     };
-    const stopResizing = () => {
+    const stopResizing = (endEvent?: PointerEvent) => {
+      if (endEvent && endEvent.pointerId !== pointerId) return;
+      cancelAnimationFrame(frame);
+      if (endEvent) setPanelWidths(latestWidths);
+      window.localStorage.setItem(PANEL_WIDTH_STORAGE_KEY, JSON.stringify(latestWidths));
       document.body.classList.remove('is-resizing-workspace');
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', stopResizing);
       window.removeEventListener('pointercancel', stopResizing);
+      resizeCleanup.current = null;
     };
+    resizeCleanup.current = stopResizing;
     document.body.classList.add('is-resizing-workspace');
     window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', stopResizing, { once: true });
-    window.addEventListener('pointercancel', stopResizing, { once: true });
+    window.addEventListener('pointerup', stopResizing);
+    window.addEventListener('pointercancel', stopResizing);
   };
 
   const handlePanelResizerKeyDown = (
@@ -642,7 +634,8 @@ function App() {
     panelTitle: string,
     content: ReactNode,
   ) => {
-    const isCollapsed = isHorizontalPanelLayout && collapsedPanels[panelKey];
+    const isCollapsed = isHorizontalPanelLayout && panelKey === 'calendar' && collapsedPanels[panelKey];
+    const isResponsivePanelActive = !isCompactPanelLayout || responsivePanel === panelKey;
     const dock = panelKey === 'calendar' ? 'left' : 'right';
 
     if (isCollapsed) {
@@ -662,8 +655,13 @@ function App() {
     }
 
     return (
-      <section className={`workspace-panel-slot panel-${panelKey}`}>
-        {isHorizontalPanelLayout && (
+      <section
+        className={`workspace-panel-slot panel-${panelKey}${
+          isResponsivePanelActive ? ' is-responsive-active' : ''
+        }`}
+        aria-hidden={isCompactPanelLayout && !isResponsivePanelActive ? true : undefined}
+      >
+        {isHorizontalPanelLayout && panelKey === 'calendar' && (
           <button
             type="button"
             className="workspace-panel-toggle"
@@ -689,6 +687,7 @@ function App() {
         role="separator"
         tabIndex={0}
         aria-label={label}
+        data-resize-boundary={boundary}
         aria-orientation="vertical"
         onPointerDown={(event) => handlePanelResizeStart(boundary, event)}
         onKeyDown={(event) => handlePanelResizerKeyDown(boundary, event)}
@@ -698,15 +697,37 @@ function App() {
 
   return (
     <div className="app-root">
-      <AppSidebar
+      {!isCompactPanelLayout && <AppSidebar
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed((value) => !value)}
-      />
+      />}
 
       <main className="app-main" aria-label="Workspace content">
+        {isCompactPanelLayout && <MobileNavigation />}
+        {workspaceError && (
+          <div className="app-error-alert" role="alert">
+            <span>Could not refresh workspace: {workspaceError}</span>
+            <button type="button" className="app-error-retry" onClick={() => void refreshWorkspace()}>Retry</button>
+          </div>
+        )}
         {nodeError && (
           <div className="app-error-alert" role="alert">
             <span>Warning: {nodeError}</span>
+            {(nodeError === 'Failed to load nodes.' || nodeError === 'Failed to load all workspace tasks.') && (
+              <button
+                type="button"
+                className="app-error-retry"
+                onClick={() => {
+                  if (activeDestination === 'category' && activeCategory) {
+                    void fetchNodes(activeCategory.id);
+                  } else {
+                    void fetchAllNodes(categoryIds);
+                  }
+                }}
+              >
+                Retry
+              </button>
+            )}
             <button
               type="button"
               className="app-error-dismiss"
@@ -733,7 +754,9 @@ function App() {
           </div>
         )}
 
-        {activeDestination === 'my-day' ? (
+        {activeDestination === 'habits' ? (
+          <Suspense fallback={<p role="status">Loading habits…</p>}><HabitsPage /></Suspense>
+        ) : activeDestination === 'my-day' ? (
           <MyDayAgenda
             taskLookup={nodeById}
             focusTasks={stagedTasks}
@@ -742,7 +765,26 @@ function App() {
             onOpenCalendar={handleOpenCalendarFromAgenda}
           />
         ) : (
-        <div className="app-shell" style={appShellStyle} data-testid="app-shell">
+        <>
+        <nav className="responsive-workspace-nav" aria-label="Workspace views">
+          <button
+            type="button"
+            className={responsivePanel === 'planning' ? 'is-active' : ''}
+            aria-pressed={responsivePanel === 'planning'}
+            onClick={() => setResponsivePanel('planning')}
+          >
+            Plan
+          </button>
+          <button
+            type="button"
+            className={responsivePanel === 'calendar' ? 'is-active' : ''}
+            aria-pressed={responsivePanel === 'calendar'}
+            onClick={() => setResponsivePanel('calendar')}
+          >
+            Calendar
+          </button>
+        </nav>
+        <div className={`app-shell app-shell-floating${calendarViewMode !== 'day' ? ' has-expanded-calendar' : ''}`} style={appShellStyle} data-testid="app-shell">
           {renderPanelChrome(
             'planning',
             'Planning workspace',
@@ -761,6 +803,17 @@ function App() {
               isArchivedExpanded={isArchivedExpanded}
               onArchivedToggle={() => setIsArchivedExpanded((value) => !value)}
               onAddNode={handleAddNode}
+              planningDay={planningDay}
+              onPlanningDayChange={handlePlanningDayChange}
+              isCalendarOpen={isCompactPanelLayout ? responsivePanel === 'calendar' : !collapsedPanels.calendar}
+              onCalendarToggle={() => {
+                if (isCompactPanelLayout) setResponsivePanel(current => current === 'calendar' ? 'planning' : 'calendar');
+                else togglePanelCollapse('calendar');
+              }}
+              onAddPlannedTask={day => {
+                const categoryId = activeCategory?.id ?? categories[0]?.id;
+                if (categoryId !== undefined) setTaskComposer({ categoryId, day });
+              }}
               onStatusChange={handleStatusChange}
               onTitleChange={handleTitleChange}
               onStageNode={stageNode}
@@ -774,14 +827,37 @@ function App() {
             />,
           )}
 
-          {renderPanelBoundary('planning-ai', 'Resize planning and AI workspaces')}
+          {renderPanelBoundary('planning-ai', 'Resize task repository')}
+          {renderPanelBoundary('ai-calendar', 'Resize calendar panel')}
 
           {renderPanelChrome(
-            'ai',
-            'AI workspace',
-            <section className="ai-workspace-panel" aria-labelledby="ai-workspace-heading">
+            'calendar',
+            'Shared calendar',
+            <section
+              className="workspace-panel workspace-panel-calendar"
+              aria-label="Shared calendar"
+            >
+              <CalendarPanel
+                accentColor={currentAccentColor}
+                headingId="workspace-calendar-heading"
+                focusedDay={calendarFocusDay}
+                onFocusedDayChange={handleCalendarDayChange}
+                taskLookup={nodeById}
+                onAddTask={day => setTaskComposer({ categoryId: activeCategory?.id ?? categories[0]?.id, day })}
+                onTaskStatusChange={handleStatusChange}
+                onTaskFocus={handleCalendarTaskFocus}
+                onRegisterPointerDrop={registerCalendarPointerDrop}
+              />
+            </section>,
+          )}
+        </div>
+        </>
+        )}
+      </main>
+      <FloatingChat open={chatOpen} onOpenChange={setChatOpen} count={stagedNodeIds.length} companionCount={companionCount}>
+            <Suspense fallback={<p role="status">Loading chat…</p>}>
+            <section className="ai-workspace-panel" aria-label="Chat and selected tasks">
               <header className="ai-workspace-header">
-                <h2 id="ai-workspace-heading">AI workspace</h2>
                 <div className="ai-workspace-tabs" role="tablist" aria-label="AI workspace views">
                   <button
                     type="button"
@@ -794,6 +870,9 @@ function App() {
                   >
                     Chat
                   </button>
+                  <button type="button" role="tab" id="ai-companion-tab" aria-controls="ai-companion-view"
+                    aria-selected={aiWorkspaceTab === 'companion'} className={aiWorkspaceTab === 'companion' ? 'is-active' : ''}
+                    onClick={() => setAiWorkspaceTab('companion')}>Companion{companionCount > 0 && <span>{companionCount}</span>}</button>
                   <button
                     type="button"
                     role="tab"
@@ -810,6 +889,12 @@ function App() {
               </header>
 
               <div className="ai-workspace-views">
+                {aiWorkspaceTab === 'companion' && <div id="ai-companion-view" role="tabpanel" aria-labelledby="ai-companion-tab" className="ai-workspace-view">
+                  <CompanionPanel onPlan={prompt => {
+                    setAiWorkspaceLaunch({ requestId: crypto.randomUUID(), source: 'companion', stagedNodeIds: [], prompt });
+                    setAiWorkspaceTab('chat');
+                  }} />
+                </div>}
                 <div
                   id="ai-chat-view"
                   role="tabpanel"
@@ -869,31 +954,12 @@ function App() {
                   />
                 </div>
               </div>
-            </section>,
-          )}
-
-          {renderPanelBoundary('ai-calendar', 'Resize AI workspace and calendar')}
-
-          {renderPanelChrome(
-            'calendar',
-            'Shared calendar',
-            <section
-              className="workspace-panel workspace-panel-calendar"
-              aria-label="Shared calendar"
-            >
-              <CalendarPanel
-                accentColor={currentAccentColor}
-                headingId="workspace-calendar-heading"
-                taskLookup={nodeById}
-                onTaskStatusChange={handleStatusChange}
-                onTaskFocus={handleCalendarTaskFocus}
-                onRegisterPointerDrop={registerCalendarPointerDrop}
-              />
-            </section>,
-          )}
-        </div>
-        )}
-      </main>
+            </section>
+            </Suspense>
+      </FloatingChat>
+      {isSettingsOpen && <SettingsDialog />}
+      {taskComposer && <TaskComposer categories={categories} categoryId={taskComposer.categoryId}
+        initialDay={taskComposer.day} onClose={() => setTaskComposer(null)} />}
     </div>
   );
 }
