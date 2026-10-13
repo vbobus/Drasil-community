@@ -209,12 +209,8 @@ test.describe('Workspace tree filters', () => {
     await page.getByRole('button', { name: /Sort tasks/ }).click();
     await page.getByRole('menuitemradio', { name: 'Priority' }).click();
 
-    const workReload = page.waitForResponse((response) =>
-      response.request().method() === 'GET' &&
-      response.url().includes(`/api/v1/nodes?categoryId=${work.id}`),
-    );
     await page.getByRole('button', { name: 'Work workspace', exact: true }).click();
-    await workReload;
+    await expect(page.getByRole('tree', { name: 'Work task nodes' })).toBeVisible();
     await expect(
       page.getByRole('button', {
         name: /Current filters: status Open; schedule Unscheduled; recurrence Any/,
@@ -237,12 +233,8 @@ test.describe('Workspace tree filters', () => {
       }),
     ).toBeVisible();
 
-    const healthReload = page.waitForResponse((response) =>
-      response.request().method() === 'GET' &&
-      response.url().includes(`/api/v1/nodes?categoryId=${health.id}`),
-    );
     await page.getByRole('button', { name: 'Health workspace', exact: true }).click();
-    await healthReload;
+    await expect(page.getByRole('tree', { name: 'Health task nodes' })).toBeVisible();
     await expect(
       page.getByRole('button', {
         name: /Current filters: status Any; schedule Any; recurrence Recurring/,
