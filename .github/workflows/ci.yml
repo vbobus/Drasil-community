@@ -70,7 +70,7 @@ jobs:
         working-directory: frontend
       - run: npx playwright install --with-deps chromium
         working-directory: frontend
-      - run: npm run test:e2e:local
+      - run: npm run test:e2e:local -- --max-failures=1 --reporter=line
         working-directory: frontend
         env:
           CI: "1"
