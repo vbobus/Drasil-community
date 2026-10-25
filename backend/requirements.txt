@@ -29,6 +29,6 @@ tzdata==2026.2
 uvicorn==0.46.0
 psycopg[binary]==3.3.3
 cryptography==50.0.0
-certifi==2026.4.22
+certifi==2026.10.19
 vercel==0.11.4
 vercel-sandbox==0.7.0
