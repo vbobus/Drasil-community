@@ -10,7 +10,7 @@ h11==0.16.0
 idna==3.19
 immutabledict==4.3.1
 langgraph==1.2.15
-langgraph-checkpoint-sqlite==3.1.1
+langgraph-checkpoint-sqlite==3.1.2
 langfuse==4.15.1
 numpy==2.4.4
 ortools==9.15.6755
